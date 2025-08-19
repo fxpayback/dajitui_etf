@@ -1,0 +1,703 @@
+{% extends "base.html" %}
+
+{% block title %}ETF管理 - 管理员控制台 - ETF网格交易助手{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- 标题 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h1 class="text-2xl font-bold text-gray-800">ETF管理</h1>
+        <div class="flex space-x-2">
+            <a href="/admin" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg transition duration-300 flex items-center">
+                <i class="fas fa-user-shield mr-1"></i> 用户管理
+            </a>
+            <a href="/dashboard" class="bg-green-600 hover:bg-green-700 text-white text-sm px-3 py-2 rounded-lg transition duration-300 flex items-center">
+                <i class="fas fa-chart-bar mr-1"></i> 返回仪表盘
+            </a>
+        </div>
+    </div>
+    
+    <div class="bg-blue-50 rounded p-4 mb-4 border border-blue-100">
+        <p class="text-gray-700"><i class="fas fa-info-circle text-blue-500 mr-2"></i> 在此页面可以管理ETF列表和历史数据。您可以添加新的ETF、查看ETF数据情况并清理历史数据。</p>
+    </div>
+</div>
+
+<!-- ETF选项卡 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+    <div class="border-b border-gray-200 mb-6">
+        <ul class="flex flex-wrap -mb-px text-sm font-medium text-center">
+            <li class="mr-2">
+                <a href="?tab=official" class="inline-block p-4 border-b-2 {% if tab == 'official' %}border-blue-600 text-blue-600 active{% else %}border-transparent hover:text-gray-600 hover:border-gray-300{% endif %} rounded-t-lg">
+                    官方ETF管理
+                </a>
+            </li>
+            <li class="mr-2">
+                <a href="?tab=custom" class="inline-block p-4 border-b-2 {% if tab == 'custom' %}border-blue-600 text-blue-600 active{% else %}border-transparent hover:text-gray-600 hover:border-gray-300{% endif %} rounded-t-lg">
+                    用户自定义ETF管理
+                </a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 官方ETF管理区 -->
+    <div id="official-etf-tab" class="{% if tab != 'official' %}hidden{% endif %}">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 md:mb-0">官方ETF列表</h2>
+            <div class="flex flex-col md:flex-row space-y-3 md:space-y-0 md:space-x-3 w-full md:w-auto">
+                <div class="relative flex-grow md:max-w-xs">
+                    <input type="text" id="etf-search" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="搜索ETF...">
+                    <button id="search-btn" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-500">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+                <button id="add-etf-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition duration-300 flex items-center justify-center">
+                    <i class="fas fa-plus-circle mr-2"></i> 添加ETF
+                </button>
+                <button id="clear-all-data-btn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition duration-300 flex items-center justify-center">
+                    <i class="fas fa-trash-alt mr-2"></i> 清空所有数据
+                </button>
+            </div>
+        </div>
+        
+        <!-- 官方ETF列表 -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">代码</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">分类</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">相关性</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">波动性</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">权重</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数据量</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">更新时间</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200" id="etf-table-body">
+                    {% for etf in etfs %}
+                    <tr>
+                        <td class="py-4 px-4 text-sm font-medium text-gray-900">{{ etf.symbol }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.name }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if etf.is_official %}bg-blue-100 text-blue-800{% else %}bg-purple-100 text-purple-800{% endif %}">
+                                {{ "官方ETF" if etf.is_official else "自定义ETF" }}
+                            </span>
+                        </td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.category }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.correlation }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.volatility_type }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.weight }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">
+                            {% if etf.data_count > 0 %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                {{ etf.data_count }}条 
+                                {% if etf.start_date and etf.end_date %}
+                                ({{ etf.start_date }}至{{ etf.end_date }})
+                                {% endif %}
+                            </span>
+                            {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                无数据
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.last_updated }}</td>
+                        <td class="py-4 px-4 text-sm font-medium">
+                            <div class="flex space-x-2">
+                                <button class="edit-etf-btn text-blue-600 hover:text-blue-900" data-symbol="{{ etf.symbol }}">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                {% if etf.data_count > 0 %}
+                                <button class="clear-etf-data-btn text-yellow-600 hover:text-yellow-900" data-symbol="{{ etf.symbol }}">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                                {% endif %}
+                                <button class="delete-etf-btn text-red-600 hover:text-red-900" data-id="{{ etf.id }}" data-symbol="{{ etf.symbol }}" data-name="{{ etf.name }}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- 用户自定义ETF管理区 -->
+    <div id="custom-etf-tab" class="{% if tab != 'custom' %}hidden{% endif %}">
+        <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 md:mb-0">用户自定义ETF列表</h2>
+            <div class="relative flex-grow md:max-w-xs">
+                <input type="text" id="custom-etf-search" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="搜索自定义ETF...">
+                <button id="custom-search-btn" class="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-500">
+                    <i class="fas fa-search"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 自定义ETF列表 -->
+        <div class="overflow-x-auto">
+            <table class="min-w-full bg-white">
+                <thead class="bg-gray-100">
+                    <tr>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">代码</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">描述</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">添加时间</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数据量</th>
+                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200" id="custom-etf-table-body">
+                    {% for etf in custom_etfs %}
+                    <tr>
+                        <td class="py-4 px-4 text-sm font-medium text-gray-900">{{ etf.symbol }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.name }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.username }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.description or '无描述' }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">{{ etf.added_at }}</td>
+                        <td class="py-4 px-4 text-sm text-gray-500">
+                            {% if etf.data_count > 0 %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                {{ etf.data_count }}条 
+                                {% if etf.start_date and etf.end_date %}
+                                ({{ etf.start_date }}至{{ etf.end_date }})
+                                {% endif %}
+                            </span>
+                            {% else %}
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+                                无数据
+                            </span>
+                            {% endif %}
+                        </td>
+                        <td class="py-4 px-4 text-sm font-medium">
+                            <div class="flex space-x-2">
+                                {% if etf.data_count > 0 %}
+                                <button class="clear-custom-etf-data-btn text-yellow-600 hover:text-yellow-900" data-symbol="{{ etf.symbol }}">
+                                    <i class="fas fa-eraser"></i>
+                                </button>
+                                {% endif %}
+                                <button class="delete-custom-etf-btn text-red-600 hover:text-red-900" data-id="{{ etf.id }}" data-symbol="{{ etf.symbol }}" data-name="{{ etf.name }}">
+                                    <i class="fas fa-trash-alt"></i>
+                                </button>
+                                <a href="{{ url_for('user_etf_data') }}?symbol={{ etf.symbol }}" class="text-blue-600 hover:text-blue-800">
+                                    <i class="fas fa-chart-line"></i>
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 新增/编辑ETF模态框 -->
+<div id="etf-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800" id="modal-title">添加ETF</h3>
+            <button id="close-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <form id="etf-form" class="space-y-4">
+            <input type="hidden" id="edit-mode" value="add">
+            <input type="hidden" id="original-symbol" value="">
+            <div>
+                <label for="symbol" class="block text-sm font-medium text-gray-700 mb-1">ETF代码</label>
+                <input type="text" id="symbol" name="symbol" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            <div id="symbol-display-group" class="hidden">
+                <label class="block text-sm font-medium text-gray-700 mb-1">ETF代码</label>
+                <div class="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-700" id="symbol-display"></div>
+                <input type="hidden" id="symbol-hidden" name="symbol">
+            </div>
+            <div>
+                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">ETF名称</label>
+                <input type="text" id="name" name="name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            <div>
+                <label for="description" class="block text-sm font-medium text-gray-700 mb-1">描述</label>
+                <textarea id="description" name="description" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" rows="2"></textarea>
+            </div>
+            <div class="flex items-center">
+                <input type="checkbox" id="is-official" name="is_official" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                <label for="is-official" class="ml-2 block text-sm text-gray-700">官方ETF</label>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="category" class="block text-sm font-medium text-gray-700 mb-1">分类</label>
+                    <select id="category" name="category" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- 选择分类 --</option>
+                        <option value="宽基指数">宽基指数</option>
+                        <option value="科技成长">科技成长</option>
+                        <option value="消费升级">消费升级</option>
+                        <option value="医疗健康">医疗健康</option>
+                        <option value="周期价值">周期价值</option>
+                        <option value="跨境对冲">跨境对冲</option>
+                        <option value="另类主题">另类主题</option>
+                        <option value="债券及现金">债券及现金</option>
+                        <option value="商品与通胀">商品与通胀</option>
+                        <option value="大盘蓝筹">大盘蓝筹</option>
+                        <option value="中小盘">中小盘</option>
+                        <option value="成长股">成长股</option>
+                        <option value="金融行业">金融行业</option>
+                        <option value="科技行业">科技行业</option>
+                        <option value="医药行业">医药行业</option>
+                        <option value="消费行业">消费行业</option>
+                        <option value="周期行业">周期行业</option>
+                        <option value="军工行业">军工行业</option>
+                        <option value="新能源行业">新能源行业</option>
+                        <option value="环保行业">环保行业</option>
+                        <option value="传媒行业">传媒行业</option>
+                        <option value="房地产行业">房地产行业</option>
+                        <option value="国企">国企</option>
+                        <option value="区域指数">区域指数</option>
+                        <option value="价值投资">价值投资</option>
+                        <option value="量化策略">量化策略</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="correlation" class="block text-sm font-medium text-gray-700 mb-1">相关性</label>
+                    <select id="correlation" name="correlation" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- 选择相关性 --</option>
+                        <option value="大盘蓝筹基准">大盘蓝筹基准</option>
+                        <option value="中小盘均衡">中小盘均衡</option>
+                        <option value="硬科技核心">硬科技核心</option>
+                        <option value="成长风格">成长风格</option>
+                        <option value="AI全产业链">AI全产业链</option>
+                        <option value="国产替代周期">国产替代周期</option>
+                        <option value="碳中和主线">碳中和主线</option>
+                        <option value="通信基础设施">通信基础设施</option>
+                        <option value="高端消费韧性">高端消费韧性</option>
+                        <option value="必选消费龙头">必选消费龙头</option>
+                        <option value="文旅复苏主题">文旅复苏主题</option>
+                        <option value="全医药行业覆盖">全医药行业覆盖</option>
+                        <option value="前沿疗法/CXO">前沿疗法/CXO</option>
+                        <option value="高股息防御">高股息防御</option>
+                        <option value="市场情绪放大器">市场情绪放大器</option>
+                        <option value="能源安全+高分红">能源安全+高分红</option>
+                        <option value="美股科技龙头">美股科技龙头</option>
+                        <option value="港股估值洼地">港股估值洼地</option>
+                        <option value="日元资产对冲">日元资产对冲</option>
+                        <option value="欧洲经济分散">欧洲经济分散</option>
+                        <option value="海外中国互联网">海外中国互联网</option>
+                        <option value="双碳政策驱动">双碳政策驱动</option>
+                        <option value="政策博弈品种">政策博弈品种</option>
+                        <option value="元宇宙/云游戏">元宇宙/云游戏</option>
+                        <option value="利率债压舱石/国债平替">利率债压舱石/国债平替</option>
+                        <option value="流动性缓冲/短债平替">流动性缓冲/短债平替</option>
+                        <option value="股债混合属性">股债混合属性</option>
+                        <option value="美债利率对冲">美债利率对冲</option>
+                        <option value="地缘政治+通胀对冲">地缘政治+通胀对冲</option>
+                        <option value="避险资产核心">避险资产核心</option>
+                        <option value="农产品周期">农产品周期</option>
+                        <option value="高">高</option>
+                        <option value="中">中</option>
+                        <option value="低">低</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label for="volatility-type" class="block text-sm font-medium text-gray-700 mb-1">波动性</label>
+                    <select id="volatility-type" name="volatility_type" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">-- 选择波动性 --</option>
+                        <option value="极高波动">极高波动</option>
+                        <option value="高波动">高波动</option>
+                        <option value="中高波动">中高波动</option>
+                        <option value="中波动">中波动</option>
+                        <option value="中低波动">中低波动</option>
+                        <option value="低波动">低波动</option>
+                        <option value="极低波动">极低波动</option>
+                        <option value="高">高</option>
+                        <option value="中">中</option>
+                        <option value="低">低</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="weight" class="block text-sm font-medium text-gray-700 mb-1">权重</label>
+                    <input type="number" id="weight" name="weight" min="0" max="10" step="0.1" value="1.0" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" id="cancel-btn" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition duration-300">
+                    取消
+                </button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition duration-300">
+                    确认
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 删除ETF的确认模态框 -->
+<div id="delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800" id="delete-modal-title">删除ETF</h3>
+            <button id="close-delete-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <p class="text-gray-600 mb-6" id="delete-modal-text">您确定要删除这个ETF吗？此操作不可撤销。</p>
+        
+        <!-- 隐藏字段 -->
+        <input type="hidden" id="delete-symbol" value="">
+        <input type="hidden" id="delete-id" value="">
+        <input type="hidden" id="delete-type" value="">
+        
+        <div class="flex justify-end space-x-3">
+            <button id="cancel-delete" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition duration-300">
+                取消
+            </button>
+            <button id="confirm-delete" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300">
+                确认删除
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 清空数据确认模态框 -->
+<div id="clear-data-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800">确认清空数据</h3>
+            <button id="close-clear-data-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <p class="text-gray-600 mb-6" id="clear-data-message">您确定要清空此ETF的所有历史数据吗？此操作不可撤销。</p>
+        
+        <div class="flex justify-end space-x-3">
+            <button id="cancel-clear-data" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition duration-300">
+                取消
+            </button>
+            <button id="confirm-clear-data" class="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition duration-300" data-symbol="">
+                确认清空
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 删除ETF的隐藏表单 -->
+<form id="delete-etf-form" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="_method" value="DELETE">
+</form>
+
+<!-- 更新ETF的隐藏表单 -->
+<form id="update-etf-form" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="_method" value="PUT">
+</form>
+
+<!-- 清空ETF数据的隐藏表单 -->
+<form id="clear-data-form" method="POST" style="display: none;">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <input type="hidden" name="_method" value="DELETE">
+</form>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+$(document).ready(function() {
+    // 搜索ETF
+    $("#search-btn").click(function() {
+        const searchText = $("#etf-search").val().toLowerCase();
+        window.location.href = "/admin/etfs?search=" + encodeURIComponent(searchText) + "&tab=official";
+    });
+    
+    // 搜索自定义ETF
+    $("#custom-search-btn").click(function() {
+        const searchText = $("#custom-etf-search").val().toLowerCase();
+        window.location.href = "/admin/etfs?search=" + encodeURIComponent(searchText) + "&tab=custom";
+    });
+    
+    // 按下回车键进行搜索
+    $("#etf-search, #custom-etf-search").keypress(function(e) {
+        if (e.which === 13) {
+            if ($(this).attr('id') === 'etf-search') {
+                $("#search-btn").click();
+            } else {
+                $("#custom-search-btn").click();
+            }
+        }
+    });
+    
+    // 添加ETF按钮
+    $("#add-etf-btn").click(function() {
+        resetEtfForm();
+        $("#modal-title").text("添加ETF");
+        $("#edit-mode").val("add");
+        $("#etf-modal").removeClass("hidden");
+    });
+    
+    // 关闭模态框
+    $("#close-modal, #cancel-btn").click(function() {
+        $("#etf-modal").addClass("hidden");
+    });
+    
+    // 编辑ETF按钮
+    $(".edit-etf-btn").click(function() {
+        const symbol = $(this).data("symbol");
+        // 获取ETF数据
+        $.ajax({
+            url: `/api/admin/etfs/${symbol}`,
+            type: 'GET',
+            success: function(etf) {
+                // 填充表单
+                $("#modal-title").text("编辑ETF");
+                $("#edit-mode").val("edit");
+                $("#original-symbol").val(symbol);
+                
+                // 如果是编辑模式，隐藏symbol输入框，显示只读版本
+                $("#symbol").val(etf.symbol);
+                
+                $("#name").val(etf.name);
+                $("#description").val(etf.description);
+                $("#is-official").prop("checked", etf.is_official === 1);
+                $("#category").val(etf.category);
+                $("#correlation").val(etf.correlation);
+                $("#volatility-type").val(etf.volatility_type);
+                $("#weight").val(etf.weight);
+                
+                // 显示模态框
+                $("#etf-modal").removeClass("hidden");
+            },
+            error: function(xhr) {
+                console.error("获取ETF信息失败:", xhr.status, xhr.statusText);
+                const response = xhr.responseJSON || {};
+                alert(`获取ETF信息失败(${xhr.status}): ${response.error || xhr.statusText || '未知错误'}`);
+            }
+        });
+    });
+    
+    // 删除官方ETF按钮
+    $(".delete-etf-btn").click(function() {
+        const id = $(this).data("id");
+        const symbol = $(this).data("symbol");
+        const name = $(this).data("name") || symbol;
+        
+        // 设置隐藏字段值，与删除自定义ETF保持一致
+        $("#delete-symbol").val(symbol);
+        $("#delete-id").val(id);
+        $("#delete-type").val("official");
+        
+        // 设置模态框文本
+        $("#delete-modal-title").text("删除ETF");
+        $("#delete-modal-text").text(`您确定要删除ETF "${name}" 吗？此操作将同时删除该ETF的所有历史数据，且不可撤销。`);
+        
+        // 显示模态框
+        $("#delete-modal").removeClass("hidden");
+    });
+    
+    // 删除自定义ETF按钮
+    $(".delete-custom-etf-btn").click(function() {
+        const id = $(this).data("id");
+        const symbol = $(this).data("symbol");
+        const name = $(this).data("name") || symbol;
+        
+        // 设置隐藏字段值
+        $("#delete-symbol").val(symbol);
+        $("#delete-id").val(id);
+        $("#delete-type").val("custom");
+        
+        // 设置模态框文本
+        $("#delete-modal-title").text("删除自定义ETF");
+        $("#delete-modal-text").text(`您确定要删除自定义ETF "${name}" 吗？此操作不可撤销。`);
+        
+        // 显示模态框
+        $("#delete-modal").removeClass("hidden");
+    });
+    
+    // 关闭删除确认模态框
+    $("#close-delete-modal, #cancel-delete").click(function() {
+        $("#delete-modal").addClass("hidden");
+    });
+    
+    // 执行删除操作
+    $("#confirm-delete").click(function() {
+        const type = $("#delete-type").val();
+        const id = $("#delete-id").val();
+        const symbol = $("#delete-symbol").val();
+        
+        console.log(`执行删除ETF操作: Symbol=${symbol}, ID=${id}, 类型=${type}`);
+        
+        const form = $("#delete-etf-form");
+        
+        if (type === "custom") {
+            // 删除自定义ETF
+            console.log(`准备删除自定义ETF: ID=${id}, Symbol=${symbol}`);
+            const action = `/api/admin/custom_etfs/${id}`;
+            console.log(`表单action: ${action}`);
+            form.attr("action", action);
+        } else {
+            // 删除官方ETF - 使用新的基于ID的API
+            console.log(`准备删除官方ETF: ID=${id}, Symbol=${symbol}`);
+            const action = `/api/admin/etfs/id/${id}`;
+            console.log(`表单action: ${action}`);
+            form.attr("action", action);
+        }
+        
+        // 统一的表单处理
+        form.find('input[name="_method"]').val('DELETE');
+        console.log(`表单data: _method=${form.find('input[name="_method"]').val()}, csrf_token=${form.find('input[name="csrf_token"]').val()}`);
+        form.submit();
+    });
+    
+    // 清除ETF数据按钮
+    $(".clear-etf-data-btn").click(function() {
+        const symbol = $(this).data("symbol");
+        $("#clear-data-message").text(`您确定要清空ETF "${symbol}" 的所有历史数据吗？此操作不可撤销。`);
+        $("#confirm-clear-data").attr("data-symbol", symbol);
+        $("#clear-data-modal").removeClass("hidden");
+    });
+    
+    // 关闭清空数据确认模态框
+    $("#close-clear-data-modal, #cancel-clear-data").click(function() {
+        $("#clear-data-modal").addClass("hidden");
+    });
+    
+    // 确认清空ETF数据
+    $("#confirm-clear-data").click(function() {
+        const symbol = $(this).attr("data-symbol");
+        console.log("清空ETF数据: " + symbol);
+        clearEtfData(symbol);
+    });
+    
+    // 清除所有ETF数据
+    $("#clear-all-data-btn").click(function() {
+        if (confirm("确定要清空所有ETF的历史数据吗？此操作不可恢复。")) {
+            clearAllEtfData();
+        }
+    });
+    
+    // 提交ETF表单
+    $("#etf-form").submit(function(e) {
+        e.preventDefault();
+        
+        const editMode = $("#edit-mode").val();
+        const originalSymbol = $("#original-symbol").val();
+        const symbol = $("#symbol").val();
+        const name = $("#name").val();
+        const description = $("#description").val();
+        const isOfficial = $("#is-official").prop("checked") ? 1 : 0;
+        const category = $("#category").val();
+        const correlation = $("#correlation").val();
+        const volatilityType = $("#volatility-type").val();
+        const weight = parseFloat($("#weight").val()) || 1.0;
+        
+        const formData = {
+            symbol: symbol,
+            name: name,
+            description: description,
+            is_official: isOfficial,
+            category: category,
+            correlation: correlation,
+            volatility_type: volatilityType,
+            weight: weight
+        };
+        
+        if (editMode === "edit") {
+            // 更新ETF - 使用表单提交
+            updateETF(originalSymbol, formData);
+        } else {
+            // 添加新ETF - 使用表单提交
+            const form = $("#update-etf-form");
+            form.attr("action", "/api/admin/etfs");
+            
+            // 将formData中的数据添加到表单
+            for (let key in formData) {
+                if (formData.hasOwnProperty(key)) {
+                    let input = form.find(`[name="${key}"]`);
+                    if (input.length) {
+                        input.val(formData[key]);
+                    } else {
+                        form.append(`<input type="hidden" name="${key}" value="${formData[key]}">`);
+                    }
+                }
+            }
+            
+            // 提交表单
+            form.submit();
+        }
+    });
+});
+
+// 清空指定ETF的历史数据
+function clearEtfData(symbol) {
+    // 使用表单提交而不是AJAX请求
+    console.log(`准备清空ETF数据: Symbol=${symbol}`);
+    const form = $("#clear-data-form");
+    form.attr("action", `/api/admin/etfs/${symbol}/data`);
+    form.find('input[name="_method"]').val('DELETE');
+    form.submit();
+}
+
+// 清空所有ETF的历史数据
+function clearAllEtfData() {
+    // 使用表单提交而不是AJAX请求
+    console.log("准备清空所有ETF数据");
+    const form = $("#clear-data-form");
+    form.attr("action", `/api/admin/etfs/data`);
+    form.find('input[name="_method"]').val('DELETE');
+    form.submit();
+}
+
+// 重置ETF表单
+function resetEtfForm() {
+    $("#etf-form")[0].reset();
+    $("#symbol").val('');
+    $("#name").val('');
+    $("#description").val('');
+    $("#is-official").prop("checked", false);
+    $("#category").val('');
+    $("#correlation").val('');
+    $("#volatility-type").val('');
+    $("#weight").val('1.0');
+}
+
+// 更新ETF信息
+function updateETF(symbol, formData) {
+    // 使用表单提交而不是AJAX请求
+    console.log(`准备更新ETF: Symbol=${symbol}`);
+    const form = $("#update-etf-form");
+    form.attr("action", `/api/admin/etfs/${symbol}`);
+    form.find('input[name="_method"]').val('PUT');
+    
+    // 将formData中的数据添加到表单
+    for (let key in formData) {
+        if (formData.hasOwnProperty(key)) {
+            // 如果表单中已存在该字段，更新值
+            let input = form.find(`[name="${key}"]`);
+            if (input.length) {
+                input.val(formData[key]);
+            } else {
+                // 如果不存在，创建新的隐藏字段
+                form.append(`<input type="hidden" name="${key}" value="${formData[key]}">`);
+            }
+        }
+    }
+    
+    // 提交表单
+    form.submit();
+}
+</script>
+{% endblock %} 

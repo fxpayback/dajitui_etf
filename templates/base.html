@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <title>{% block title %}大鸡腿ETF网格交易助手 {{ app_version }}{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        /* 移动端优化样式 */
+        @media (max-width: 768px) {
+            .mobile-menu-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background: white;
+                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                z-index: 50;
+            }
+            .mobile-menu {
+                display: flex;
+                justify-content: space-around;
+                padding: 0.75rem 0;
+                flex-wrap: wrap;
+            }
+            .mobile-menu a {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                color: #4B5563;
+                font-size: 0.75rem;
+                padding: 0.5rem;
+                min-width: 20%;
+            }
+            .mobile-menu a i {
+                font-size: 1.25rem;
+                margin-bottom: 0.25rem;
+            }
+            .mobile-menu a.active {
+                color: #2563EB;
+            }
+            /* 为底部菜单腾出空间 */
+            body {
+                padding-bottom: 4.5rem;
+            }
+        }
+        
+        /* 用户下拉菜单样式 */
+        .user-dropdown {
+            position: relative;
+        }
+        
+        .user-dropdown-menu {
+            position: absolute;
+            right: 0;
+            top: 100%;
+            width: 200px;
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            z-index: 20;
+            margin-top: 0.5rem;
+        }
+        
+        .user-dropdown-menu a {
+            display: block;
+            padding: 0.75rem 1rem;
+            color: #374151;
+            border-radius: 0.25rem;
+        }
+        
+        .user-dropdown-menu a:hover {
+            background-color: #F3F4F6;
+        }
+        
+        .user-dropdown-menu hr {
+            margin: 0.5rem 0;
+            border-color: #E5E7EB;
+        }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-100 font-sans">
+    <!-- 导航栏 - 桌面版 -->
+    <nav class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg hidden md:block">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-chart-line text-2xl"></i>
+                <span class="text-xl font-bold">大鸡腿ETF网格交易助手 <span class="text-sm">{{ app_version }}</span></span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <a href="/" class="hover:text-blue-200 {% if request.path == '/' %}text-white font-medium{% endif %}"><i class="fas fa-home mr-1"></i> 首页</a>
+                <a href="/dashboard" class="hover:text-blue-200 {% if request.path == '/dashboard' %}text-white font-medium{% endif %}"><i class="fas fa-tachometer-alt mr-1"></i> 数据仪表盘</a>
+                <a href="/history" class="hover:text-blue-200 {% if request.path == '/history' %}text-white font-medium{% endif %}"><i class="fas fa-history mr-1"></i> 历史数据</a>
+                <a href="/public_backtest" class="hover:text-blue-200 {% if request.path == '/public_backtest' %}text-white font-medium{% endif %}"><i class="fas fa-calculator mr-1"></i> 交易回测</a>
+                <a href="/portfolio" class="hover:text-blue-200 {% if request.path == '/portfolio' %}text-white font-medium{% endif %}"><i class="fas fa-chart-pie mr-1"></i> 投资组合</a>
+                
+                <!-- 用户登录状态 -->
+                {% if current_user %}
+                <div class="user-dropdown ml-4">
+                    <button id="userMenuButton" class="flex items-center space-x-2 hover:text-blue-200 focus:outline-none">
+                        <div class="bg-blue-200 text-blue-800 rounded-full h-8 w-8 flex items-center justify-center">
+                            <span class="font-medium">{{ current_user.username[0]|upper }}</span>
+                        </div>
+                        <span>{{ current_user.username }}</span>
+                        <i class="fas fa-chevron-down text-xs"></i>
+                    </button>
+                    <div id="userDropdownMenu" class="user-dropdown-menu hidden">
+                        <div class="p-3 border-b border-gray-200">
+                            <p class="font-medium text-gray-800">{{ current_user.username }}</p>
+                            <p class="text-sm text-gray-500">{{ current_user.email }}</p>
+                        </div>
+                        <a href="{{ url_for('my_portfolios') }}"><i class="fas fa-folder mr-2"></i> 我的投资组合</a>
+                        <a href="{{ url_for('user_etf_data') }}"><i class="fas fa-chart-bar mr-2"></i> 自定义ETF</a>
+                        <a href="{{ url_for('settings') }}"><i class="fas fa-cog mr-2"></i> 个人设置</a>
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('admin_console') }}"><i class="fas fa-user-shield mr-2"></i> 管理员控制台</a>
+                        {% endif %}
+                        <hr>
+                        <a href="{{ url_for('logout') }}" class="text-red-600"><i class="fas fa-sign-out-alt mr-2"></i> 退出登录</a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="ml-4 flex space-x-2">
+                    <a href="{{ url_for('login') }}" class="hover:text-blue-200"><i class="fas fa-sign-in-alt mr-1"></i> 登录</a>
+                    <a href="{{ url_for('register') }}" class="hover:text-blue-200"><i class="fas fa-user-plus mr-1"></i> 注册</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- 导航栏 - 移动版 -->
+    <nav class="bg-gradient-to-r from-blue-600 to-indigo-700 text-white shadow-lg md:hidden">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-chart-line text-xl"></i>
+                <span class="text-lg font-bold">大鸡腿ETF网格交易助手 <span class="text-xs">{{ app_version }}</span></span>
+            </div>
+            <!-- 移动端登录状态 -->
+            {% if current_user %}
+            <div class="user-dropdown">
+                <button id="userMenuButtonMobile" class="rounded-full bg-blue-200 text-blue-800 h-8 w-8 flex items-center justify-center">
+                    <span class="font-medium">{{ current_user.username[0]|upper }}</span>
+                </button>
+                <div id="userDropdownMenuMobile" class="user-dropdown-menu hidden">
+                    <div class="p-3 border-b border-gray-200">
+                        <p class="font-medium text-gray-800">{{ current_user.username }}</p>
+                        <p class="text-sm text-gray-500">{{ current_user.email }}</p>
+                    </div>
+                    <a href="{{ url_for('my_portfolios') }}"><i class="fas fa-folder mr-2"></i> 我的投资组合</a>
+                    <a href="{{ url_for('user_etf_data') }}"><i class="fas fa-chart-bar mr-2"></i> 自定义ETF</a>
+                    <a href="{{ url_for('settings') }}"><i class="fas fa-cog mr-2"></i> 个人设置</a>
+                    {% if current_user.is_admin %}
+                    <a href="{{ url_for('admin_console') }}"><i class="fas fa-user-shield mr-2"></i> 管理员控制台</a>
+                    {% endif %}
+                    <hr>
+                    <a href="{{ url_for('logout') }}" class="text-red-600"><i class="fas fa-sign-out-alt mr-2"></i> 退出登录</a>
+                </div>
+            </div>
+            {% else %}
+            <div class="flex space-x-2">
+                <a href="{{ url_for('login') }}" class="text-sm hover:text-blue-200"><i class="fas fa-sign-in-alt"></i></a>
+                <a href="{{ url_for('register') }}" class="text-sm hover:text-blue-200"><i class="fas fa-user-plus"></i></a>
+            </div>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- 主要内容 -->
+    <div class="container mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="bg-gray-800 text-white py-6 mt-8 md:mt-12">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="mb-4 md:mb-0">
+                    <h3 class="text-lg md:text-xl font-bold mb-2">大鸡腿ETF网格交易助手 <span class="text-xs md:text-sm">{{ app_version }}</span></h3>
+                    <p class="text-gray-400 text-sm md:text-base">帮助投资者更科学地进行ETF网格交易</p>
+                </div>
+                <div class="flex flex-col items-center md:items-end">
+                    <div class="flex space-x-4">
+                        <a href="https://www.zhihu.com/people/4-85-36-85" class="text-gray-400 hover:text-white"><i class="fab fa-zhihu text-xl"></i></a>
+                        <a href="https://xueqiu.com/u/yaoyaoba" class="text-gray-400 hover:text-white"><i class="fas fa-snowflake text-xl"></i></a>
+                        <a href="https://mp.weixin.qq.com/s/Gf2nXvDyflSw4nypLUjXsQ" class="text-gray-400 hover:text-white"><i class="fas fa-rss text-xl"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-4 text-center text-gray-500 text-xs md:text-sm">
+                &copy; 2025 大鸡腿ETF网格交易助手. 保留所有权利.
+            </div>
+        </div>
+    </footer>
+
+    <!-- 移动端底部导航 -->
+    <div class="mobile-menu-container md:hidden">
+        <div class="mobile-menu">
+            <a href="/" class="{% if request.path == '/' %}active{% endif %}">
+                <i class="fas fa-home"></i>
+                <span>首页</span>
+            </a>
+            <a href="/dashboard" class="{% if request.path == '/dashboard' %}active{% endif %}">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>仪表盘</span>
+            </a>
+            <a href="/history" class="{% if request.path == '/history' %}active{% endif %}">
+                <i class="fas fa-history"></i>
+                <span>历史</span>
+            </a>
+            <a href="/public_backtest" class="{% if request.path == '/public_backtest' %}active{% endif %}">
+                <i class="fas fa-calculator"></i>
+                <span>回测</span>
+            </a>
+            <a href="/portfolio" class="{% if request.path == '/portfolio' %}active{% endif %}">
+                <i class="fas fa-chart-pie"></i>
+                <span>组合</span>
+            </a>
+            {% if current_user %}
+            <a href="{{ url_for('my_portfolios') }}" class="{{ 'active' if request.path == url_for('my_portfolios') }}">
+                <i class="fas fa-user"></i>
+                <span>我的</span>
+            </a>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('admin_console') }}" class="{{ 'active' if request.path.startswith('/admin') }}">
+                <i class="fas fa-user-shield"></i>
+                <span>管理</span>
+            </a>
+            {% endif %}
+            {% else %}
+            <a href="{{ url_for('login') }}" class="{{ 'active' if request.path == url_for('login') }}">
+                <i class="fas fa-sign-in-alt"></i>
+                <span>登录</span>
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    {% block extra_scripts %}{% endblock %}
+    
+    <!-- 全局脚本 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 微信公众号二维码弹窗功能
+            const publicButtons = document.querySelectorAll('.wechat-public-btn');
+            const qrcodePublicModal = document.getElementById('qrcodePublicModal');
+            
+            // 个人微信二维码弹窗功能
+            const personalButtons = document.querySelectorAll('.wechat-personal-btn');
+            const qrcodePersonalModal = document.getElementById('qrcodePersonalModal');
+            
+            // 关闭按钮
+            const closeButtons = document.querySelectorAll('.close-qrcode-modal');
+            
+            // 公众号按钮点击
+            if (publicButtons) {
+                publicButtons.forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        qrcodePublicModal.classList.remove('hidden');
+                    });
+                });
+            }
+            
+            // 个人微信按钮点击
+            if (personalButtons) {
+                personalButtons.forEach(btn => {
+                    btn.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        qrcodePersonalModal.classList.remove('hidden');
+                    });
+                });
+            }
+            
+            // 关闭按钮点击
+            if (closeButtons) {
+                closeButtons.forEach(btn => {
+                    btn.addEventListener('click', function() {
+                        if (qrcodePublicModal) qrcodePublicModal.classList.add('hidden');
+                        if (qrcodePersonalModal) qrcodePersonalModal.classList.add('hidden');
+                    });
+                });
+            }
+            
+            // 点击弹窗外部关闭弹窗
+            [qrcodePublicModal, qrcodePersonalModal].forEach(modal => {
+                if (modal) {
+                    modal.addEventListener('click', function(e) {
+                        if(e.target === modal) {
+                            modal.classList.add('hidden');
+                        }
+                    });
+                }
+            });
+            
+            // 用户下拉菜单
+            const userMenuButton = document.getElementById('userMenuButton');
+            const userDropdownMenu = document.getElementById('userDropdownMenu');
+            const userMenuButtonMobile = document.getElementById('userMenuButtonMobile');
+            const userDropdownMenuMobile = document.getElementById('userDropdownMenuMobile');
+            
+            // 桌面版用户菜单
+            if (userMenuButton && userDropdownMenu) {
+                userMenuButton.addEventListener('click', function() {
+                    userDropdownMenu.classList.toggle('hidden');
+                });
+                
+                // 点击外部关闭菜单
+                document.addEventListener('click', function(e) {
+                    if (!userMenuButton.contains(e.target) && !userDropdownMenu.contains(e.target)) {
+                        userDropdownMenu.classList.add('hidden');
+                    }
+                });
+            }
+            
+            // 移动版用户菜单
+            if (userMenuButtonMobile && userDropdownMenuMobile) {
+                userMenuButtonMobile.addEventListener('click', function() {
+                    userDropdownMenuMobile.classList.toggle('hidden');
+                });
+                
+                // 点击外部关闭菜单
+                document.addEventListener('click', function(e) {
+                    if (!userMenuButtonMobile.contains(e.target) && !userDropdownMenuMobile.contains(e.target)) {
+                        userDropdownMenuMobile.classList.add('hidden');
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html> 

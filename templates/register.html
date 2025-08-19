@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}注册 - ETF网格交易助手{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">注册新账号</h1>
+        
+        {% if error %}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+        
+        <form method="post" action="{{ url_for('register') }}" class="space-y-4">
+            <!-- CSRF令牌 -->
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            
+            <div>
+                <label for="username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                <input type="text" id="username" name="username" required 
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <p class="mt-1 text-xs text-gray-500">用户名用于登录，4-20个字符，只能包含字母、数字和下划线</p>
+            </div>
+            
+            <div>
+                <label for="email" class="block text-sm font-medium text-gray-700 mb-1">电子邮箱</label>
+                <input type="email" id="email" name="email" required
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <p class="mt-1 text-xs text-gray-500">用于找回密码和接收通知</p>
+            </div>
+            
+            <div>
+                <label for="password" class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                <input type="password" id="password" name="password" required
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <p class="mt-1 text-xs text-gray-500">至少8个字符，建议包含字母、数字和特殊符号</p>
+            </div>
+            
+            <div>
+                <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1">确认密码</label>
+                <input type="password" id="confirm_password" name="confirm_password" required
+                    class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <div class="flex items-center">
+                <input id="agree" name="agree" type="checkbox" required
+                    class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                <label for="agree" class="ml-2 block text-sm text-gray-700">
+                    我已阅读并同意 <a href="#" class="text-blue-600 hover:text-blue-500">服务条款</a> 和 <a href="#" class="text-blue-600 hover:text-blue-500">隐私政策</a>
+                </label>
+            </div>
+            
+            <div>
+                <button type="submit" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    创建账号
+                </button>
+            </div>
+        </form>
+        
+        <div class="mt-6 text-center">
+            <p class="text-sm text-gray-600">
+                已有账号? 
+                <a href="{{ url_for('login') }}" class="text-blue-600 hover:text-blue-500 font-medium">
+                    立即登录
+                </a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('form');
+    
+    form.addEventListener('submit', function(event) {
+        const password = document.getElementById('password').value;
+        const confirmPassword = document.getElementById('confirm_password').value;
+        
+        if (password !== confirmPassword) {
+            event.preventDefault();
+            alert('两次输入的密码不一致，请重新输入');
+            return false;
+        }
+        
+        if (password.length < 8) {
+            event.preventDefault();
+            alert('密码长度必须至少为8个字符');
+            return false;
+        }
+        
+        return true;
+    });
+});
+</script>
+{% endblock %} 

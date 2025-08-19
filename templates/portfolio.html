@@ -1,0 +1,607 @@
+{% extends "base.html" %}
+
+{% block title %}{% if is_custom_portfolio and portfolio %}{{ portfolio.name }} - {% endif %}投资组合分配 - ETF网格交易助手{% endblock %}
+
+{% block content %}
+<!-- 标题和说明 -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    {% if is_custom_portfolio and portfolio %}
+        <div class="flex justify-between items-center mb-4">
+            <h1 class="text-2xl font-bold text-gray-800">{{ portfolio.name }}</h1>
+            
+            {% if is_admin %}
+                <a href="{{ url_for('admin_user_portfolios', user_id=portfolio.user_id) }}" class="text-blue-600 hover:text-blue-800 mr-3">
+                    <i class="fas fa-arrow-left mr-1"></i> 返回用户投资组合
+                </a>
+            {% else %}
+                <a href="{{ url_for('edit_portfolio', portfolio_id=portfolio.id) }}" class="text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-edit mr-1"></i> 编辑投资组合
+                </a>
+            {% endif %}
+        </div>
+        
+        {% if portfolio.description %}
+            <p class="text-gray-600 mb-4 italic">{{ portfolio.description }}</p>
+        {% endif %}
+        
+        {% if not has_etfs %}
+            <div class="bg-yellow-50 rounded p-4 mb-6 border border-yellow-100">
+                <p class="text-yellow-700 flex items-center">
+                    <i class="fas fa-exclamation-triangle text-yellow-500 mr-2"></i>
+                    <span>此投资组合中没有添加任何ETF。请先<a href="{{ url_for('edit_portfolio', portfolio_id=portfolio.id) }}" class="text-blue-600 hover:text-blue-800 underline">添加ETF</a>，然后再计算分配方案。</span>
+                </p>
+            </div>
+        {% else %}
+            <div class="bg-blue-50 rounded p-4 mb-6 border border-blue-100">
+                <p class="text-gray-700"><i class="fas fa-info-circle text-blue-500 mr-2"></i> 当前显示的是您自定义的投资组合。ETF列表和权重已根据您的设置进行了调整。</p>
+            </div>
+        {% endif %}
+    {% else %}
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">投资组合分配计算器</h1>
+    {% endif %}
+    
+    <p class="text-gray-600 mb-6">根据ETF的权重和当前建议仓位，计算最优的资金分配方案。ETF按照100股为最小购买单位。</p>
+    
+    <!-- 总投资金额输入 -->
+    <div class="mb-6">
+        <div class="flex flex-wrap items-center">
+            <label for="total-investment" class="mr-4 font-medium text-gray-700">总投资金额 (元):</label>
+            <div class="relative flex-grow max-w-md">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <span class="text-gray-500">¥</span>
+                </div>
+                <input type="number" id="total-investment" class="form-input block w-full pl-10 pr-12 py-2 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50" placeholder="例如: 100000" min="1000" step="1000" {% if portfolio and portfolio.total_amount and portfolio.total_amount > 0 %}value="{{ portfolio.total_amount }}"{% endif %}>
+                <div class="absolute inset-y-0 right-0 flex items-center">
+                    <button id="calculate-btn" class="h-full bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 rounded-r-lg transition duration-300">
+                        计算分配
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 投资组合摘要 -->
+    <div id="portfolio-summary" class="hidden bg-blue-50 rounded-lg p-4 border border-blue-100 mb-4">
+        <div class="flex flex-wrap justify-between items-center">
+            <div>
+                <h3 class="font-bold text-gray-800">投资组合摘要</h3>
+                <p class="text-sm text-gray-600">根据ETF权重和当前建议仓位计算</p>
+            </div>
+            <div class="flex space-x-6 mt-2 md:mt-0">
+                <div>
+                    <p class="text-sm text-gray-500">已分配金额</p>
+                    <p id="allocated-amount" class="font-bold text-gray-800">¥0</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">剩余金额</p>
+                    <p id="remaining-amount" class="font-bold text-gray-800">¥0</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">总仓位</p>
+                    <p id="total-position" class="font-bold text-gray-800">0%</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">ETF数量</p>
+                    <p id="etf-count" class="font-bold text-gray-800">0</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 加载指示器 -->
+    <div id="loading" class="hidden flex justify-center items-center py-4">
+        <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        <p class="ml-2 text-gray-700">正在计算最优分配方案...</p>
+    </div>
+</div>
+
+<!-- ETF分配表格 -->
+<div id="allocation-results" class="hidden">
+    <!-- 分类标签 -->
+    <div class="mb-4 flex flex-wrap">
+        <button class="category-tab active-tab bg-blue-600 text-white py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="all">全部</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="宽基指数">宽基指数</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="科技成长">科技成长</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="消费升级">消费升级</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="医疗健康">医疗健康</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="周期价值">周期价值</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="跨境对冲">跨境对冲</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="另类主题">另类主题</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="债券及现金">债券及现金</button>
+        <button class="category-tab bg-gray-200 hover:bg-gray-300 py-2 px-4 rounded-t-lg mr-2 mb-2" data-category="商品与通胀">商品与通胀</button>
+    </div>
+    
+    <!-- 表格 -->
+    <div class="bg-white rounded-lg shadow-md overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ETF名称</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">代码</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类别</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">当前价格</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">权重</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">建议仓位</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">网格间隔</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="网格交易股数：当价格上下穿网格时交易的一层网格的股数，计算方式为总可购买股数除以网格层数">网格交易股数</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" title="购买股数：当下ETF应该买入的股数，与仓位紧密相关">购买股数</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">实际金额</th>
+                    </tr>
+                </thead>
+                <tbody id="allocation-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- 数据将通过JavaScript动态填充 -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- 导出按钮 -->
+    <div class="mt-6 flex justify-end">
+        <button id="export-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-file-export mr-2"></i> 导出为CSV
+        </button>
+    </div>
+</div>
+
+<!-- 在head部分或适当位置添加这些ETF元素 -->
+{% for etf in symbols %}
+<span style="display:none;" 
+      data-symbol="{{ etf.code }}" 
+      data-weight="{{ etf.weight }}" 
+      data-name="{{ etf.name }}" 
+      {% if etf.is_custom %}data-custom="true"{% endif %}></span>
+{% endfor %}
+
+<!-- 添加一个脚本块来初始化ETF元素数据 -->
+<script>
+    // 初始化ETF元素数据
+    const etfElements = {{ etf_elements|safe }};
+    
+    // 在页面加载完成后设置
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('ETF元素数据加载成功:', etfElements);
+    });
+</script>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const calculateBtn = document.getElementById('calculate-btn');
+        const totalInvestmentInput = document.getElementById('total-investment');
+        const loading = document.getElementById('loading');
+        const portfolioSummary = document.getElementById('portfolio-summary');
+        const allocationResults = document.getElementById('allocation-results');
+        const allocationTableBody = document.getElementById('allocation-table-body');
+        const allocatedAmount = document.getElementById('allocated-amount');
+        const remainingAmount = document.getElementById('remaining-amount');
+        const totalPosition = document.getElementById('total-position');
+        const etfCount = document.getElementById('etf-count');
+        const exportBtn = document.getElementById('export-btn');
+        const categoryTabs = document.querySelectorAll('.category-tab');
+        
+        // 存储所有ETF数据
+        let allEtfData = [];
+        
+        // 初始化变量，通过Jinja2传递给JavaScript
+        const isCustomPortfolio = {% if is_custom_portfolio %}true{% else %}false{% endif %};
+        const hasPortfolio = {% if portfolio %}true{% else %}false{% endif %};
+        const hasTotalAmount = {% if portfolio and portfolio.total_amount and portfolio.total_amount > 0 %}true{% else %}false{% endif %};
+        const symbols = JSON.parse('{{ symbols_json|safe }}');
+        const hasEtfs = symbols && symbols.length > 0;
+        const portfolioId = {% if portfolio and portfolio.id %}{{ portfolio.id }}{% else %}null{% endif %};
+        
+        // 如果是自定义投资组合且有总金额且有ETF，自动计算
+        if (isCustomPortfolio && hasPortfolio && hasTotalAmount && hasEtfs) {
+            // 延迟触发，确保页面上所有元素都已加载
+            setTimeout(function() {
+                calculateBtn.click();
+            }, 500);
+        }
+        
+        // 计算按钮点击事件
+        calculateBtn.addEventListener('click', function() {
+            const totalInvestment = parseFloat(totalInvestmentInput.value);
+            
+            if (isNaN(totalInvestment) || totalInvestment <= 0) {
+                alert('请输入有效的投资金额');
+                return;
+            }
+            
+            // 显示加载指示器
+            loading.classList.remove('hidden');
+            portfolioSummary.classList.add('hidden');
+            allocationResults.classList.add('hidden');
+            
+            // 获取所有ETF的数据
+            fetchAllEtfData(totalInvestment);
+        });
+        
+        // 获取所有ETF数据
+        function fetchAllEtfData(totalInvestment) {
+            // 检查是否有ETF可计算
+            if (!hasEtfs) {
+                // 隐藏加载提示
+                loading.classList.add('hidden');
+                
+                // 如果是自定义投资组合但没有ETF，显示添加ETF提示
+                if (isCustomPortfolio && hasPortfolio) {
+                    allocationTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="10" class="px-6 py-8 text-center">
+                                <div class="flex flex-col items-center justify-center">
+                                    <i class="fas fa-exclamation-circle text-yellow-500 text-3xl mb-2"></i>
+                                    <p class="text-gray-700 font-medium">当前投资组合中没有添加任何ETF</p>
+                                    <p class="text-gray-500 mt-1">请先添加ETF到您的投资组合，然后再尝试计算分配</p>
+                                    ${isCustomPortfolio && hasPortfolio && portfolioId ? `
+                                    <a href="/edit_portfolio/${portfolioId}" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                                        <i class="fas fa-plus mr-1"></i> 添加ETF
+                                    </a>
+                                    ` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    allocationResults.classList.remove('hidden');
+                }
+                return;
+            }
+            
+            // 存储所有ETF数据的数组
+            allEtfData = [];
+            
+            // 计数器，用于跟踪已完成的请求数量
+            let completedRequests = 0;
+            
+            // 显示加载提示
+            loading.classList.remove('hidden');
+            
+            // 记录已处理的Symbol，避免重复请求
+            const processedSymbols = new Set();
+            
+            // 对每个ETF发起请求，先检查是否有缓存数据
+            symbols.forEach(symbol => {
+                // 如果已经处理过这个symbol，跳过
+                if (processedSymbols.has(symbol)) {
+                    console.log(`跳过重复的Symbol: ${symbol}`);
+                    return;
+                }
+                
+                // 记录已处理的symbol
+                processedSymbols.add(symbol);
+                
+                // 查找对应的ETF信息
+                let isCustom = false;
+                let etfWeight = "1.0%"; // 默认权重
+                let etfName = symbol;
+                
+                // 从etfElements中获取ETF信息
+                const etfInfo = etfElements.find(etf => etf.symbol === symbol);
+                if (etfInfo) {
+                    etfWeight = etfInfo.weight;
+                    isCustom = etfInfo.is_custom;
+                    etfName = etfInfo.name;
+                }
+                
+                // 先尝试从缓存API获取数据
+                fetch(`/api/etf/${symbol}?use_cache=true&context=portfolio&portfolio_id={{ portfolio.id if portfolio else "" }}`)
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error(`获取ETF数据失败: ${response.status}`);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        // 如果是自定义投资组合，更新权重
+                        if (isCustomPortfolio) {
+                            data.weight = etfWeight;
+                        }
+                        
+                        // Recalculate position using linear interpolation
+                        if (data.upper_limit !== undefined && data.lower_limit !== undefined && data.current_price !== undefined) {
+                            const range_diff = data.upper_limit - data.lower_limit;
+                            if (range_diff > 0) {
+                                const level_fraction = Math.max(0, Math.min(1, (data.current_price - data.lower_limit) / range_diff));
+                                data.position = 100 * (1 - level_fraction);
+                            } else {
+                                data.position = 50;
+                            }
+                        }
+                        
+                        // 存储ETF数据
+                        allEtfData.push(data);
+                        
+                        // 增加完成的请求计数
+                        completedRequests++;
+                        
+                        // 如果所有请求都已完成，计算分配
+                        if (completedRequests === processedSymbols.size) {
+                            calculateAllocation(totalInvestment);
+                        }
+                    })
+                    .catch(error => {
+                        console.error(`获取${symbol}缓存数据失败:`, error);
+                        
+                        // 如果缓存获取失败，直接创建默认数据对象，不尝试获取最新数据
+                        console.log(`为ETF ${symbol} 创建默认数据对象`);
+                        const defaultData = {
+                            symbol: symbol,
+                            name: etfName,
+                            current_price: 1.0,  // 默认价格
+                            volatility: 10.0,    // 默认波动率
+                            grid_spacing: 1.25,  // 默认网格间隔
+                            upper_limit: 1.2,    // 默认上限
+                            lower_limit: 0.8,    // 默认下限
+                            grid_levels: 6,      // 默认网格层数
+                            category: isCustom ? '自定义ETF' : '其他',
+                            correlation: '未知',
+                            volatility_type: '未知',
+                            weight: etfWeight,
+                            is_custom: isCustom
+                        };
+                        // Calculate default position
+                        if (defaultData.upper_limit !== undefined && defaultData.lower_limit !== undefined && defaultData.current_price !== undefined) {
+                            let default_range_diff = defaultData.upper_limit - defaultData.lower_limit;
+                            if (default_range_diff > 0) {
+                                let default_fraction = Math.max(0, Math.min(1, (defaultData.current_price - defaultData.lower_limit) / default_range_diff));
+                                defaultData.position = 100 * (1 - default_fraction);
+                            } else {
+                                defaultData.position = 50;
+                            }
+                        } else {
+                            defaultData.position = 50;
+                        }
+                        // 存储ETF数据
+                        allEtfData.push(defaultData);
+                        
+                        // 增加完成的请求计数
+                        completedRequests++;
+                        
+                        // 如果所有请求都已完成，计算分配
+                        if (completedRequests === processedSymbols.size) {
+                            calculateAllocation(totalInvestment);
+                        }
+                    });
+            });
+        }
+        
+        // 计算资金分配
+        function calculateAllocation(totalInvestment) {
+            // 按类别对ETF进行分组
+            const etfsByCategory = {};
+            
+            allEtfData.forEach(etf => {
+                if (!etfsByCategory[etf.category]) {
+                    etfsByCategory[etf.category] = [];
+                }
+                etfsByCategory[etf.category].push(etf);
+            });
+            
+            // 计算每个ETF的分配金额
+            allEtfData.forEach(etf => {
+                // 解析权重百分比
+                const weightPercentage = parseFloat(etf.weight.replace('%', '')) / 100;
+                
+                // 确保grid_spacing字段存在，如果不存在则使用默认值
+                etf.grid_spacing = etf.grid_spacing || (etf.volatility ? (etf.volatility / 8).toFixed(1) : "3.0");
+                
+                // 将网格间隔格式化为一位小数
+                etf.grid_spacing = parseFloat(etf.grid_spacing).toFixed(1);
+                
+                // 将建议仓位转换为整数
+                etf.position = Math.round(etf.position);
+                
+                // 计算分配金额（总资金 × ETF权重）
+                const allocatedAmount = totalInvestment * weightPercentage;
+                
+                // 计算可以购买的股数（不考虑100股的整数倍限制）
+                const sharePrice = etf.current_price;
+                const totalShares = Math.floor(allocatedAmount / sharePrice);
+                
+                // 获取网格层数
+                const gridLevels = etf.grid_levels || 6; // 使用后端返回的网格层数，如果没有则默认为6
+                
+                // 计算每个网格交易的股数（可购买股数 ÷ 网格层数）
+                // 网格交易股数：当价格上下穿网格时交易的一层网格的股数
+                let gridTradeShares = 0;
+                
+                if (totalShares > 0) {
+                    // 每个网格交易的股数应该是总股数除以网格层数，向下取整为100的整数倍
+                    gridTradeShares = Math.floor(totalShares / gridLevels / 100) * 100;
+                    // 确保至少是100股
+                    gridTradeShares = Math.max(100, gridTradeShares);
+                }
+                
+                // 计算考虑仓位的分配金额
+                const positionAdjustedAmount = allocatedAmount * (etf.position / 100);
+                
+                // 计算可以购买的股数（考虑仓位，并确保是100的整数倍）
+                // 购买股数：当下ETF应该买入的股数，与仓位紧密相关
+                const maxShares = Math.floor(positionAdjustedAmount / sharePrice / 100) * 100;
+                
+                // 计算实际分配金额
+                const actualAmount = maxShares * sharePrice;
+                
+                // 添加计算结果到ETF数据中
+                etf.allocatedAmount = allocatedAmount;
+                etf.positionAdjustedAmount = positionAdjustedAmount;
+                etf.totalShares = totalShares;
+                etf.maxShares = maxShares;
+                etf.actualAmount = actualAmount;
+                etf.gridTradeShares = gridTradeShares;
+                etf.gridLevels = gridLevels;
+            });
+            
+            // 计算总分配金额和剩余金额
+            const totalAllocated = allEtfData.reduce((sum, etf) => sum + etf.actualAmount, 0);
+            const remaining = totalInvestment - totalAllocated;
+            
+            // 计算有实际分配的ETF数量
+            const activeEtfCount = allEtfData.filter(etf => etf.maxShares > 0).length;
+            
+            // 更新摘要信息
+            allocatedAmount.textContent = `¥${totalAllocated.toLocaleString('zh-CN', {maximumFractionDigits: 2})}`;
+            remainingAmount.textContent = `¥${remaining.toLocaleString('zh-CN', {maximumFractionDigits: 2})}`;
+            // 计算并显示总仓位百分比（已分配金额/总投资金额）
+            const positionPercentage = (totalAllocated / totalInvestment * 100).toFixed(0);
+            totalPosition.textContent = `${positionPercentage}%`;
+            etfCount.textContent = activeEtfCount;
+            
+            // 渲染表格
+            renderAllocationTable('all');
+            
+            // 隐藏加载指示器，显示结果
+            loading.classList.add('hidden');
+            portfolioSummary.classList.remove('hidden');
+            allocationResults.classList.remove('hidden');
+        }
+        
+        // 渲染分配表格
+        function renderAllocationTable(category) {
+            // 清空表格
+            allocationTableBody.innerHTML = '';
+            
+            // 筛选ETF
+            let filteredEtfs = allEtfData;
+            if (category !== 'all') {
+                filteredEtfs = allEtfData.filter(etf => etf.category === category);
+            }
+            
+            // 按类别和名称排序
+            filteredEtfs.sort((a, b) => {
+                if (a.category !== b.category) {
+                    return a.category.localeCompare(b.category);
+                }
+                return a.name.localeCompare(b.name);
+            });
+            
+            // 添加行
+            let currentCategory = '';
+            
+            filteredEtfs.forEach(etf => {
+                // 如果是新类别，添加类别标题行
+                if (category === 'all' && etf.category !== currentCategory) {
+                    currentCategory = etf.category;
+                    
+                    const categoryRow = document.createElement('tr');
+                    categoryRow.className = 'bg-gray-100';
+                    categoryRow.innerHTML = `
+                        <td colspan="10" class="px-6 py-2 font-bold text-gray-700">${currentCategory}</td>
+                    `;
+                    allocationTableBody.appendChild(categoryRow);
+                }
+                
+                // 添加ETF行
+                const row = document.createElement('tr');
+                row.className = etf.maxShares > 0 ? '' : 'text-gray-400';
+                
+                // 设置行的类别属性，用于筛选
+                row.setAttribute('data-category', etf.category);
+                
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <div class="ml-4">
+                                <div class="text-sm font-medium text-gray-900"><a href="/dashboard?symbol=${etf.symbol}" class="text-blue-600 hover:text-blue-800 hover:underline">${etf.name}</a></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${etf.symbol}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${etf.category}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">¥${etf.current_price.toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${etf.weight}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getPositionColorClass(etf.position)}">
+                            ${etf.position}%
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${etf.grid_spacing}%</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${etf.gridTradeShares > 0 ? 'font-bold text-purple-600' : 'text-gray-400'}" title="网格交易股数：当价格上下穿网格时交易的一层网格的股数，计算方式为总可购买股数除以网格层数">
+                        ${etf.gridTradeShares > 0 ? etf.gridTradeShares : '不足交易'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${etf.maxShares > 0 ? 'font-bold text-blue-600' : 'text-gray-400'}" title="购买股数：当下ETF应该买入的股数，与仓位紧密相关">
+                        ${etf.maxShares > 0 ? etf.maxShares : '0'}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm ${etf.maxShares > 0 ? 'font-bold text-green-600' : 'text-gray-400'}">
+                        ${etf.maxShares > 0 ? '¥' + etf.actualAmount.toLocaleString('zh-CN', {maximumFractionDigits: 2}) : '¥0'}
+                    </td>
+                `;
+                
+                allocationTableBody.appendChild(row);
+            });
+            
+            // 如果没有数据，显示提示
+            if (filteredEtfs.length === 0) {
+                const emptyRow = document.createElement('tr');
+                emptyRow.innerHTML = `
+                    <td colspan="10" class="px-6 py-4 text-center text-gray-500">
+                        没有找到符合条件的ETF
+                    </td>
+                `;
+                allocationTableBody.appendChild(emptyRow);
+            }
+        }
+        
+        // 获取仓位颜色类
+        function getPositionColorClass(position) {
+            if (position >= 80) {
+                return 'bg-green-100 text-green-800';
+            } else if (position >= 60) {
+                return 'bg-green-100 text-green-800';
+            } else if (position >= 40) {
+                return 'bg-yellow-100 text-yellow-800';
+            } else if (position >= 20) {
+                return 'bg-orange-100 text-orange-800';
+            } else {
+                return 'bg-red-100 text-red-800';
+            }
+        }
+        
+        // 类别标签点击事件
+        categoryTabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // 移除所有标签的活动状态
+                categoryTabs.forEach(t => {
+                    t.classList.remove('active-tab', 'bg-blue-600', 'text-white');
+                    t.classList.add('bg-gray-200', 'hover:bg-gray-300');
+                });
+                
+                // 添加当前标签的活动状态
+                this.classList.add('active-tab', 'bg-blue-600', 'text-white');
+                this.classList.remove('bg-gray-200', 'hover:bg-gray-300');
+                
+                // 渲染表格
+                renderAllocationTable(this.getAttribute('data-category'));
+            });
+        });
+        
+        // 导出为CSV
+        exportBtn.addEventListener('click', function() {
+            // 创建CSV内容
+            let csvContent = "ETF名称,代码,类别,当前价格,权重,建议仓位,网格间隔,网格交易股数,购买股数,实际金额\n";
+            
+            allEtfData.forEach(etf => {
+                csvContent += `"${etf.name}",${etf.symbol},${etf.category},${etf.current_price.toFixed(2)},${etf.weight},${etf.position}%,${etf.grid_spacing}%,${etf.gridTradeShares},${etf.maxShares},${etf.actualAmount.toFixed(2)}\n`;
+            });
+            
+            // 创建Blob对象
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            // 创建下载链接
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `ETF投资组合_${new Date().toISOString().slice(0, 10)}.csv`);
+            link.style.visibility = 'hidden';
+            
+            // 添加到文档并触发点击
+            document.body.appendChild(link);
+            link.click();
+            
+            // 清理
+            document.body.removeChild(link);
+        });
+    });
+</script>
+{% endblock %}

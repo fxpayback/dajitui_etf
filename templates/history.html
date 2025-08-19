@@ -1,0 +1,602 @@
+{% extends "base.html" %}
+
+{% block title %}历史数据 - ETF网格交易助手{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- ETF选择器和数据源选择 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+    <h1 class="text-xl md:text-2xl font-bold text-gray-800 mb-3 md:mb-4">历史数据</h1>
+    
+    <!-- 桌面版选择器 -->
+    <div class="hidden md:flex md:flex-wrap md:items-center md:space-x-4">
+        <div class="flex items-center">
+            <label for="etf-selector-desktop" class="mr-2 font-medium text-gray-700">选择ETF:</label>
+            <select id="etf-selector-desktop" class="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                {% for symbol in symbols %}
+                <option value="{{ symbol.code }}" {% if symbol.code == selected %}selected{% endif %}>
+                    {{ symbol.name }} ({{ symbol.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="flex items-center">
+            <label for="data-source-desktop" class="mr-2 font-medium text-gray-700">数据来源:</label>
+            <select id="data-source-desktop" class="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                <option value="history">数据库数据</option>
+                <option value="generate">实时计算数据</option>
+            </select>
+        </div>
+        
+        <button id="refresh-btn-desktop" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-sync-alt mr-2"></i> 刷新数据
+        </button>
+    </div>
+    
+    <!-- 移动版选择器 -->
+    <div class="flex flex-col md:hidden space-y-3">
+        <div>
+            <label for="etf-selector-mobile" class="block mb-1 text-sm font-medium text-gray-700">选择ETF:</label>
+            <select id="etf-selector-mobile" class="w-full form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 py-2 px-3 text-sm">
+                {% for symbol in symbols %}
+                <option value="{{ symbol.code }}" {% if symbol.code == selected %}selected{% endif %}>
+                    {{ symbol.name }} ({{ symbol.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div>
+            <label for="data-source-mobile" class="block mb-1 text-sm font-medium text-gray-700">数据来源:</label>
+            <select id="data-source-mobile" class="w-full form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 py-2 px-3 text-sm">
+                <option value="history">数据库数据</option>
+                <option value="generate">实时计算数据</option>
+            </select>
+        </div>
+        
+        <button id="refresh-btn-mobile" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+            <i class="fas fa-sync-alt mr-2"></i> 刷新数据
+        </button>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loading" class="hidden flex justify-center items-center p-4 md:p-8">
+    <div class="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-t-2 border-b-2 border-blue-500"></div>
+</div>
+
+<!-- 在表格上方添加图表 -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6" id="history-price-chart-container">
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">历史价格与仓位</h2>
+        <canvas id="history-price-chart" height="200" class="md:h-250"></canvas>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6" id="history-volatility-chart-container">
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">历史波动率与网格间隔</h2>
+        <canvas id="history-volatility-chart" height="200" class="md:h-250"></canvas>
+    </div>
+</div>
+
+<!-- 历史数据表格 - 移动端优化 -->
+<div class="bg-white rounded-lg shadow-md overflow-hidden">
+    <!-- 移动端表格提示 -->
+    <div class="block md:hidden p-3 bg-blue-50 text-xs text-blue-700 border-b border-blue-100">
+        <i class="fas fa-info-circle mr-1"></i> 左右滑动查看完整数据
+    </div>
+    
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">价格</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">波动率</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">网格间隔</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">上限</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">下限</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">网格层数</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">当前层数</th>
+                    <th scope="col" class="px-3 md:px-6 py-2 md:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">建议仓位</th>
+                </tr>
+            </thead>
+            <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                <tr>
+                    <td colspan="9" class="px-3 md:px-6 py-3 md:py-4 text-center text-gray-500 text-xs md:text-sm">加载中...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 桌面版和移动版选择器
+        const etfSelectorDesktop = document.getElementById('etf-selector-desktop');
+        const etfSelectorMobile = document.getElementById('etf-selector-mobile');
+        const dataSourceDesktop = document.getElementById('data-source-desktop');
+        const dataSourceMobile = document.getElementById('data-source-mobile');
+        const refreshBtnDesktop = document.getElementById('refresh-btn-desktop');
+        const refreshBtnMobile = document.getElementById('refresh-btn-mobile');
+        const loading = document.getElementById('loading');
+        const tableBody = document.getElementById('history-table-body');
+        
+        // 声明图表变量
+        let historyPriceChart = null;
+        let historyVolatilityChart = null;
+        
+        // 初始加载数据
+        loadHistoryData(getSelectedETF());
+        
+        // 桌面版选择ETF变化时加载数据
+        if (etfSelectorDesktop) {
+            etfSelectorDesktop.addEventListener('change', function() {
+                const selectedValue = this.value;
+                if (etfSelectorMobile) etfSelectorMobile.value = selectedValue;
+                loadHistoryData(selectedValue);
+                updateUrl(selectedValue);
+            });
+        }
+        
+        // 移动版选择ETF变化时加载数据
+        if (etfSelectorMobile) {
+            etfSelectorMobile.addEventListener('change', function() {
+                const selectedValue = this.value;
+                if (etfSelectorDesktop) etfSelectorDesktop.value = selectedValue;
+                loadHistoryData(selectedValue);
+                updateUrl(selectedValue);
+            });
+        }
+        
+        // 桌面版数据源选择事件
+        if (dataSourceDesktop) {
+            dataSourceDesktop.addEventListener('change', function() {
+                if (dataSourceMobile) dataSourceMobile.value = this.value;
+                loadHistoryData(getSelectedETF());
+            });
+        }
+        
+        // 移动版数据源选择事件
+        if (dataSourceMobile) {
+            dataSourceMobile.addEventListener('change', function() {
+                if (dataSourceDesktop) dataSourceDesktop.value = this.value;
+                loadHistoryData(getSelectedETF());
+            });
+        }
+        
+        // 桌面版刷新按钮点击事件
+        if (refreshBtnDesktop) {
+            refreshBtnDesktop.addEventListener('click', function() {
+                loadHistoryData(getSelectedETF());
+            });
+        }
+        
+        // 移动版刷新按钮点击事件
+        if (refreshBtnMobile) {
+            refreshBtnMobile.addEventListener('click', function() {
+                loadHistoryData(getSelectedETF());
+            });
+        }
+        
+        // 获取当前选中的ETF
+        function getSelectedETF() {
+            if (etfSelectorDesktop && etfSelectorDesktop.value) {
+                return etfSelectorDesktop.value;
+            } else if (etfSelectorMobile && etfSelectorMobile.value) {
+                return etfSelectorMobile.value;
+            }
+            return '510300'; // 默认值
+        }
+        
+        // 获取当前选中的数据源
+        function getSelectedDataSource() {
+            if (dataSourceDesktop && dataSourceDesktop.value) {
+                return dataSourceDesktop.value;
+            } else if (dataSourceMobile && dataSourceMobile.value) {
+                return dataSourceMobile.value;
+            }
+            return 'history'; // 默认值
+        }
+        
+        // 更新URL，不刷新页面
+        function updateUrl(symbol) {
+            const url = new URL(window.location);
+            url.searchParams.set('symbol', symbol);
+            window.history.pushState({}, '', url);
+        }
+        
+        function loadHistoryData(symbol) {
+            // 显示加载指示器
+            loading.classList.remove('hidden');
+            tableBody.innerHTML = '<tr><td colspan="9" class="px-3 md:px-6 py-3 md:py-4 text-center text-gray-500 text-xs md:text-sm">加载中...</td></tr>';
+            
+            // 添加时间戳防止缓存
+            const timestamp = new Date().getTime();
+            
+            // 确定API端点
+            let url;
+            const dataSource = getSelectedDataSource();
+            switch(dataSource) {
+                case 'generate':
+                    url = `/api/generate_history/${symbol}?_=${timestamp}`;
+                    break;
+                default:
+                    url = `/api/history/${symbol}?_=${timestamp}&context=history`;
+            }
+            
+            console.log(`正在获取历史数据: ${symbol}, URL: ${url}`);
+            
+            fetch(url)
+                .then(response => {
+                    console.log('API响应状态:', response.status);
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            console.error('错误响应内容:', text);
+                            throw new Error(`HTTP错误! 状态: ${response.status}, 内容: ${text}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('获取到的数据类型:', typeof data);
+                    console.log('数据预览:', Array.isArray(data) ? `数组长度: ${data.length}` : JSON.stringify(data).substring(0, 200));
+                    
+                    if (data.error) {
+                        throw new Error(`API错误: ${data.error}`);
+                    }
+                    
+                    // 检查数据格式是否符合新的API格式
+                    if (!data.dates || !data.prices || !data.volatilities || !data.grid_spacings || !data.positions) {
+                        throw new Error('数据格式不正确，缺少必要的字段');
+                    }
+                    
+                    if (data.dates.length === 0) {
+                        tableBody.innerHTML = '<tr><td colspan="9" class="px-3 md:px-6 py-3 md:py-4 text-center text-yellow-500 text-xs md:text-sm">暂无历史数据</td></tr>';
+                        loading.classList.add('hidden');
+                        return;
+                    }
+                    
+                    updateHistoryTable(data);
+                    // 隐藏加载指示器
+                    loading.classList.add('hidden');
+                })
+                .catch(error => {
+                    console.error('获取数据错误:', error);
+                    console.error('错误堆栈:', error.stack);
+                    
+                    // 显示详细错误信息和重试按钮
+                    tableBody.innerHTML = `
+                        <tr>
+                            <td colspan="9" class="px-3 md:px-6 py-3 md:py-4">
+                                <div class="flex flex-col items-center">
+                                    <p class="text-red-500 mb-2 text-xs md:text-sm">获取数据失败: ${error.message}</p>
+                                    <button id="retry-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-1.5 md:py-2 px-3 md:px-4 rounded-lg transition duration-300 flex items-center text-xs md:text-sm">
+                                        <i class="fas fa-sync-alt mr-1 md:mr-2"></i> 重试
+                                    </button>
+                                    <div class="mt-2 text-xs text-gray-500 max-w-lg overflow-auto">
+                                        <details>
+                                            <summary class="text-xs">错误详情</summary>
+                                            <pre class="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">${error.stack || error.message}</pre>
+                                        </details>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                    
+                    document.getElementById('retry-btn').addEventListener('click', function() {
+                        loadHistoryData(getSelectedETF());
+                    });
+                    
+                    loading.classList.add('hidden');
+                    
+                    // 清空图表
+                    if (historyPriceChart) {
+                        historyPriceChart.destroy();
+                        historyPriceChart = null;
+                    }
+                    if (historyVolatilityChart) {
+                        historyVolatilityChart.destroy();
+                        historyVolatilityChart = null;
+                    }
+                });
+        }
+        
+        function updateHistoryTable(data) {
+            if (data.dates.length === 0) {
+                tableBody.innerHTML = '<tr><td colspan="9" class="px-3 md:px-6 py-3 md:py-4 text-center text-gray-500 text-xs md:text-sm">暂无历史数据</td></tr>';
+                return;
+            }
+            
+            // 计算网格层数和当前层数（从API中可能无法直接获取）
+            // 使用最简单的方法：假设网格层数恒定为固定值，当前层数根据仓位估算
+            const gridLevels = 10; // 默认网格层数
+            
+            let html = '';
+            for (let i = 0; i < data.dates.length; i++) {
+                // 计算当前层数（从仓位反推）
+                const position = data.positions[i];
+                const currentLevel = Math.round(gridLevels * (1 - position / 100));
+                
+                // 假设上下限，实际应该从API中获取，如果有的话
+                // 使用当前价格±网格间距的近似值
+                const price = data.prices[i];
+                const gridSpacing = data.grid_spacings[i] / 100; // 转换为小数
+                const upperLimit = price * (1 + gridSpacing * 5);
+                const lowerLimit = price * (1 - gridSpacing * 5);
+                
+                html += `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${data.dates[i]}</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${data.prices[i].toFixed(2)}</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${data.volatilities[i].toFixed(2)}%</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${data.grid_spacings[i].toFixed(2)}%</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${upperLimit.toFixed(2)}</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${lowerLimit.toFixed(2)}</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${gridLevels}</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm text-gray-900">${currentLevel}</td>
+                    <td class="px-3 md:px-6 py-2 md:py-4 whitespace-nowrap text-xs md:text-sm font-medium">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${getPositionColorClass(data.positions[i])}">
+                            ${data.positions[i].toFixed(0)}%
+                        </span>
+                    </td>
+                </tr>
+                `;
+            }
+            
+            tableBody.innerHTML = html;
+            
+            // 更新图表
+            try {
+                updateHistoryCharts(data);
+            } catch (error) {
+                console.error('更新图表时出错:', error);
+                // 显示图表错误信息
+                document.getElementById('history-price-chart-container').innerHTML = `
+                    <div class="flex items-center justify-center h-40 md:h-64 bg-red-50 rounded-lg">
+                        <div class="text-center">
+                            <p class="text-red-500 mb-2 text-xs md:text-sm">图表加载失败</p>
+                            <p class="text-gray-500 text-xs">${error.message}</p>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('history-volatility-chart-container').innerHTML = `
+                    <div class="flex items-center justify-center h-40 md:h-64 bg-red-50 rounded-lg">
+                        <div class="text-center">
+                            <p class="text-red-500 mb-2 text-xs md:text-sm">图表加载失败</p>
+                            <p class="text-gray-500 text-xs">${error.message}</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateHistoryCharts(data) {
+            // 检查Chart对象是否存在
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js库未加载');
+                throw new Error('Chart.js库未加载，无法创建图表');
+            }
+            
+            // 准备图表数据
+            const dates = data.dates;
+            const prices = data.prices;
+            const positions = data.positions;
+            const volatility = data.volatilities;
+            const gridSpacing = data.grid_spacings;
+            
+            // 价格和仓位图表
+            if (historyPriceChart) {
+                historyPriceChart.destroy();
+            }
+            
+            const priceCtx = document.getElementById('history-price-chart').getContext('2d');
+            historyPriceChart = new Chart(priceCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: '价格',
+                            data: prices,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: '建议仓位 (%)',
+                            data: positions,
+                            borderColor: 'rgb(16, 185, 129)',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1,
+                            yAxisID: 'y2'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: {
+                                    size: window.innerWidth < 768 ? 10 : 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            bodyFont: {
+                                size: window.innerWidth < 768 ? 10 : 12
+                            },
+                            titleFont: {
+                                size: window.innerWidth < 768 ? 10 : 12
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: '价格',
+                                font: {
+                                    size: window.innerWidth < 768 ? 10 : 12
+                                }
+                            },
+                            ticks: {
+                                font: {
+                                    size: window.innerWidth < 768 ? 8 : 10
+                                }
+                            }
+                        },
+                        y2: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: '仓位 (%)',
+                                font: {
+                                    size: window.innerWidth < 768 ? 10 : 12
+                                }
+                            },
+                            min: 0,
+                            max: 100,
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            ticks: {
+                                font: {
+                                    size: window.innerWidth < 768 ? 8 : 10
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: {
+                                    size: window.innerWidth < 768 ? 8 : 10
+                                },
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // 波动率和网格间隔图表
+            if (historyVolatilityChart) {
+                historyVolatilityChart.destroy();
+            }
+            
+            const volatilityCtx = document.getElementById('history-volatility-chart').getContext('2d');
+            historyVolatilityChart = new Chart(volatilityCtx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [
+                        {
+                            label: '波动率 (%)',
+                            data: volatility,
+                            borderColor: 'rgb(139, 92, 246)',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1
+                        },
+                        {
+                            label: '网格间隔 (%)',
+                            data: gridSpacing,
+                            borderColor: 'rgb(79, 70, 229)',
+                            backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                boxWidth: 12,
+                                font: {
+                                    size: window.innerWidth < 768 ? 10 : 12
+                                }
+                            }
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                            bodyFont: {
+                                size: window.innerWidth < 768 ? 10 : 12
+                            },
+                            titleFont: {
+                                size: window.innerWidth < 768 ? 10 : 12
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '百分比 (%)',
+                                font: {
+                                    size: window.innerWidth < 768 ? 10 : 12
+                                }
+                            },
+                            ticks: {
+                                font: {
+                                    size: window.innerWidth < 768 ? 8 : 10
+                                }
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                font: {
+                                    size: window.innerWidth < 768 ? 8 : 10
+                                },
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function getPositionColorClass(position) {
+            if (position >= 80) {
+                return 'bg-green-100 text-green-800';
+            } else if (position >= 60) {
+                return 'bg-green-50 text-green-600';
+            } else if (position >= 40) {
+                return 'bg-blue-50 text-blue-600';
+            } else if (position >= 20) {
+                return 'bg-yellow-50 text-yellow-600';
+            } else {
+                return 'bg-red-50 text-red-600';
+            }
+        }
+    });
+</script>
+{% endblock %}

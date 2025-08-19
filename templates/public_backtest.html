@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+
+{% block title %}单ETF网格交易回测 - ETF网格交易助手{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/luxon@2.0.2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon@1.0.0"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/zh.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- 回测配置面板 -->
+<div class="bg-white rounded-lg shadow-md p-6 mb-8">
+  <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-4 flex items-center">
+    <i class="fas fa-calculator text-blue-600 mr-3"></i>
+    单ETF网格交易回测
+  </h1>
+  
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+    <!-- 左侧：回测配置 -->
+    <div>
+      <div class="mb-6">
+        <h2 class="text-lg font-semibold text-gray-700 mb-3">回测参数设置</h2>
+        <div class="space-y-4">
+          <!-- 单ETF选择器 -->
+          <div id="single-etf-selector" class="transition-all duration-300">
+            <label for="etf-select" class="block text-sm font-medium text-gray-700 mb-2">选择ETF</label>
+            <select id="etf-select" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+              {% for symbol in symbols %}
+              <option value="{{ symbol.code }}">{{ symbol.name }} ({{ symbol.code }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          
+          <!-- 初始资金 -->
+          <div>
+            <label for="initial-capital" class="block text-sm font-medium text-gray-700 mb-2">初始资金 (元)</label>
+            <input type="number" id="initial-capital" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="100000" min="1000">
+          </div>
+          
+          <!-- 回测日期范围 -->
+          <div>
+            <label for="date-range" class="block text-sm font-medium text-gray-700 mb-2">回测日期范围</label>
+            <div class="flex space-x-4">
+              <div class="w-1/2">
+                <input type="text" id="start-date" placeholder="开始日期" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+              </div>
+              <div class="w-1/2">
+                <input type="text" id="end-date" placeholder="结束日期" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+              </div>
+            </div>
+          </div>
+          
+          <!-- 网格参数 -->
+          <div>
+            <h3 class="text-sm font-medium text-gray-700 mb-2">网格参数</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label for="grid-type" class="block text-xs text-gray-500 mb-1">网格类型</label>
+                <select id="grid-type" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                  <option value="volatility">波动率网格</option>
+                  <option value="arithmetic">等差网格</option>
+                  <option value="geometric">等比网格</option>
+                </select>
+              </div>
+              <div>
+                <label for="grid-levels" class="block text-xs text-gray-500 mb-1">网格层数</label>
+                <input type="number" id="grid-levels" class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50" value="" min="3" max="50" placeholder="自动计算">
+              </div>
+            </div>
+            
+            <div id="grid-info" class="mt-2 text-xs text-gray-500">
+              <p id="volatility-info">波动率: <span id="volatility-value">--</span></p>
+              <p id="grid-spacing-info">网格间距: <span id="grid-spacing-value">--</span></p>
+              <p id="grid-range-info">网格区间: <span id="grid-range-value">--</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 回测按钮 -->
+      <div class="flex justify-center space-x-4">
+        <button id="run-backtest" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition duration-300 flex items-center text-lg shadow-md">
+          <i class="fas fa-play mr-2"></i> 运行回测
+        </button>
+      </div>
+    </div>
+    
+    <!-- 右侧：回测说明 -->
+    <div class="bg-blue-50 rounded-lg p-6">
+      <h2 class="text-lg font-semibold text-blue-800 mb-3">网格交易回测说明</h2>
+      <div class="space-y-4 text-sm text-gray-700">
+        <p><i class="fas fa-info-circle text-blue-600 mr-2"></i> 网格交易是一种低买高卖的策略，通过在价格区间内设置多个网格，在价格波动中获利。</p>
+        <p><i class="fas fa-cog text-blue-600 mr-2"></i> <strong>波动率网格</strong>：根据ETF的历史波动率自动设置网格间距，适应性较强。</p>
+        <p><i class="fas fa-th text-blue-600 mr-2"></i> <strong>等差网格</strong>：网格价格等间距分布，简单直观。</p>
+        <p><i class="fas fa-percentage text-blue-600 mr-2"></i> <strong>等比网格</strong>：网格价格按比例分布，适合长期波动较大的品种。</p>
+        <p><i class="fas fa-chart-line text-blue-600 mr-2"></i> 回测系统会模拟在历史行情中的表现，计算年化收益率、夏普比率、最大回撤等关键指标。</p>
+        <div class="mt-6 p-3 bg-yellow-50 border-l-4 border-yellow-400 rounded">
+          <p class="text-yellow-800"><i class="fas fa-exclamation-triangle text-yellow-600 mr-2"></i> <strong>注意</strong>：回测结果仅供参考，历史业绩不代表未来表现。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loading-indicator" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+  <div class="bg-white p-5 rounded-lg flex flex-col items-center">
+    <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500 mb-3"></div>
+    <p class="text-gray-700">正在进行回测计算，请稍候...</p>
+  </div>
+</div>
+
+<!-- 回测结果面板 -->
+<div id="backtest-results" class="hidden">
+  <!-- 回测结果摘要 -->
+  <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-800 mb-4">回测结果摘要</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <!-- 年化收益率 -->
+      <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+        <h3 class="text-sm font-medium text-gray-500 mb-1">年化收益率</h3>
+        <p id="annual-return" class="text-2xl font-bold text-blue-700">--</p>
+      </div>
+      
+      <!-- 夏普比率 -->
+      <div class="bg-gradient-to-br from-green-50 to-teal-50 rounded-lg p-4 border border-green-100">
+        <h3 class="text-sm font-medium text-gray-500 mb-1">夏普比率</h3>
+        <p id="sharpe-ratio" class="text-2xl font-bold text-green-700">--</p>
+      </div>
+      
+      <!-- 最大回撤 -->
+      <div class="bg-gradient-to-br from-red-50 to-orange-50 rounded-lg p-4 border border-red-100">
+        <h3 class="text-sm font-medium text-gray-500 mb-1">最大回撤</h3>
+        <p id="max-drawdown" class="text-2xl font-bold text-red-700">--</p>
+      </div>
+      
+      <!-- 胜率 -->
+      <div class="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg p-4 border border-yellow-100">
+        <h3 class="text-sm font-medium text-gray-500 mb-1">胜率</h3>
+        <p id="win-rate" class="text-2xl font-bold text-yellow-700">--</p>
+      </div>
+    </div>
+    
+    <!-- 额外统计信息 -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+      <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+        <h3 class="text-xs font-medium text-gray-500 mb-1">交易次数</h3>
+        <p id="trade-count" class="text-lg font-bold text-gray-700">--</p>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+        <h3 class="text-xs font-medium text-gray-500 mb-1">收益金额</h3>
+        <p id="position-profit" class="text-lg font-bold text-gray-700">--</p>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+        <h3 class="text-xs font-medium text-gray-500 mb-1">网格交易收益</h3>
+        <p id="grid-profit" class="text-lg font-bold text-gray-700">--</p>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 资金曲线图表 -->
+  <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+    <h2 class="text-xl font-bold text-gray-800 mb-4">资金曲线</h2>
+    <div class="h-96">
+      <canvas id="equity-chart"></canvas>
+    </div>
+  </div>
+  
+  <!-- 交易明细 -->
+  <div class="bg-white rounded-lg shadow-md p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h2 class="text-xl font-bold text-gray-800">交易明细</h2>
+      <button id="export-csv" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition duration-300 flex items-center text-sm">
+        <i class="fas fa-download mr-2"></i> 导出CSV
+      </button>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">日期</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">类型</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">价格</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">数量</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">金额</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">利润</th>
+            <th scope="col" class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">持仓金额</th>
+          </tr>
+        </thead>
+        <tbody id="trades-table" class="bg-white divide-y divide-gray-200">
+          <!-- 交易记录将通过JavaScript动态添加 -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // 初始化日期选择器
+  const today = new Date();
+  const oneYearAgo = new Date();
+  oneYearAgo.setFullYear(today.getFullYear() - 1);
+  
+  flatpickr("#start-date", {
+    dateFormat: "Y-m-d",
+    defaultDate: oneYearAgo,
+    locale: "zh"
+  });
+  
+  flatpickr("#end-date", {
+    dateFormat: "Y-m-d",
+    defaultDate: today,
+    locale: "zh"
+  });
+  
+  // ETF选择更改时获取参数
+  document.getElementById('etf-select').addEventListener('change', fetchEtfParams);
+  
+  // 初始加载ETF参数
+  fetchEtfParams();
+  
+  // 运行回测按钮点击事件
+  document.getElementById('run-backtest').addEventListener('click', runBacktest);
+  
+  // 导出CSV按钮点击事件
+  document.getElementById('export-csv').addEventListener('click', exportToCSV);
+  
+  // 获取ETF参数函数
+  function fetchEtfParams() {
+    const symbol = document.getElementById('etf-select').value;
+    
+    // 显示加载中状态
+    setGridInfoLoading(true);
+    
+    console.log(`获取ETF参数: ${symbol}`);
+    
+    // 发送请求获取ETF参数
+    fetch(`/api/etf_params?symbol=${symbol}&context=public_backtest`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`服务器返回状态码: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('ETF参数返回数据:', data);
+        
+        if (data.error) {
+          document.getElementById('grid-info').innerHTML = 
+            `<p class="text-red-500">加载参数错误: ${data.error}</p>`;
+          console.error('参数错误:', data.error);
+          return;
+        }
+        
+        // 根据系统原有方式计算推荐的网格层数
+        const volatility = parseFloat(data.volatility);
+        const gridSpacing = parseFloat(data.grid_spacing);
+        const upperLimit = parseFloat(data.upper_limit);
+        const lowerLimit = parseFloat(data.lower_limit);
+        
+        // 计算总区间百分比
+        const rangePercentage = parseFloat(data.range_percentage) || 
+            (2 * (upperLimit - lowerLimit) / (upperLimit + lowerLimit) * 100);
+        
+        // 计算网格层数 = 总区间百分比 ÷ 网格间隔
+        const recommendedGridLevels = Math.round(rangePercentage / gridSpacing);
+        
+        // 设置网格层数输入框的默认值为推荐值
+        document.getElementById('grid-levels').value = recommendedGridLevels;
+        document.getElementById('grid-levels').placeholder = `推荐${recommendedGridLevels}层`;
+        
+        // 更新参数显示
+        document.getElementById('grid-info').innerHTML = `
+          <p id="volatility-info">波动率: <span id="volatility-value" class="font-medium">${data.volatility}%</span></p>
+          <p id="grid-spacing-info">网格间距: <span id="grid-spacing-value" class="font-medium">${data.grid_spacing}%</span></p>
+          <p id="grid-range-info">网格区间: <span id="grid-range-value" class="font-medium">${data.upper_limit.toFixed(2)} - ${data.lower_limit.toFixed(2)}</span></p>
+          <p id="grid-levels-info">推荐网格层数: <span id="grid-levels-value" class="font-medium">${recommendedGridLevels}</span></p>
+          <p id="range-percentage-info">网格区间百分比: <span id="range-percentage-value" class="font-medium">${rangePercentage.toFixed(2)}%</span></p>
+        `;
+      })
+      .catch(error => {
+        console.error('获取ETF参数失败:', error);
+        document.getElementById('grid-info').innerHTML = 
+          `<p class="text-red-500">获取参数失败: ${error.message}</p>`;
+      });
+  }
+  
+  // 设置网格信息加载状态
+  function setGridInfoLoading(isLoading) {
+    const gridInfo = document.getElementById('grid-info');
+    if (isLoading) {
+      gridInfo.innerHTML = '<p class="text-center italic">加载中...</p>';
+    }
+  }
+  
+  // 运行回测函数
+  function runBacktest() {
+    // 获取回测参数
+    const symbol = document.getElementById('etf-select').value;
+    const initialCapital = document.getElementById('initial-capital').value;
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+    const gridLevels = document.getElementById('grid-levels').value;
+    const gridType = document.getElementById('grid-type').value;
+    
+    // 验证参数
+    if (!startDate || !endDate) {
+      alert('请选择回测日期范围');
+      return;
+    }
+    
+    // 显示加载指示器
+    document.getElementById('loading-indicator').classList.remove('hidden');
+    
+    // 构建请求参数
+    const params = {
+      symbol: symbol,
+      initial_capital: initialCapital,
+      start_date: startDate,
+      end_date: endDate,
+      grid_levels: gridLevels,
+      grid_type: gridType
+    };
+    
+    console.log('发送回测请求, 参数:', params);
+    
+    // 发送回测请求
+    fetch('/api/public_backtest', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(params)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`服务器返回状态码: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      // 隐藏加载指示器
+      document.getElementById('loading-indicator').classList.add('hidden');
+      
+      console.log('回测结果:', data);
+      
+      if (data.error) {
+        alert('回测失败: ' + data.error);
+        return;
+      }
+      
+      // 显示回测结果
+      showBacktestResults(data);
+    })
+    .catch(error => {
+      document.getElementById('loading-indicator').classList.add('hidden');
+      console.error('回测请求失败:', error);
+      alert(`回测请求失败: ${error.message}`);
+    });
+  }
+  
+  // 显示回测结果
+  function showBacktestResults(data) {
+    // 显示结果区域
+    document.getElementById('backtest-results').classList.remove('hidden');
+    
+    // 更新摘要指标
+    document.getElementById('annual-return').textContent = data.annual_return + '%';
+    document.getElementById('sharpe-ratio').textContent = data.sharpe_ratio;
+    document.getElementById('max-drawdown').textContent = data.max_drawdown + '%';
+    document.getElementById('win-rate').textContent = data.win_rate + '%';
+    document.getElementById('trade-count').textContent = data.total_trades || data.trade_count;
+    
+    // 将持仓收益从百分比改为显示金额
+    const positionProfitAmount = new Intl.NumberFormat('zh-CN', {
+      style: 'currency',
+      currency: 'CNY'
+    }).format(data.position_profit);
+    document.getElementById('position-profit').textContent = positionProfitAmount;
+    
+    document.getElementById('grid-profit').textContent = data.grid_profit + '%';
+    
+    // 生成资金曲线图表
+    if (data.dates && data.total_equity) {
+      createEquityChart(data.dates, data.total_equity);
+    } else {
+      console.error('资金曲线数据不完整:', data);
+      document.getElementById('equity-chart').closest('div.bg-white').innerHTML = 
+        '<div class="p-4 text-center text-red-500">无法显示资金曲线：数据不完整</div>';
+    }
+    
+    // 填充交易明细表格
+    populateTradesTable(data.trades);
+    
+    // 滚动到结果区域
+    document.getElementById('backtest-results').scrollIntoView({ behavior: 'smooth' });
+  }
+  
+  // 创建资金曲线图表
+  function createEquityChart(dates, equityCurve) {
+    const ctx = document.getElementById('equity-chart').getContext('2d');
+    
+    // 销毁现有图表（如果存在）
+    if (window.equityChart) window.equityChart.destroy();
+    
+    console.log("创建资金曲线图表，日期数量:", dates.length, "资金数量:", equityCurve.length);
+    
+    // 准备数据点
+    const dataPoints = [];
+    if (Array.isArray(dates) && Array.isArray(equityCurve)) {
+      for (let i = 0; i < dates.length; i++) {
+        // 将日期字符串解析为Date对象
+        const dateObj = new Date(dates[i]);
+        dataPoints.push({
+          x: dateObj,
+          y: equityCurve[i]
+        });
+      }
+    } else {
+      console.error("资金曲线数据格式不正确:", { dates, equityCurve });
+    }
+    
+    console.log("处理后的数据点:", dataPoints.length ? dataPoints.slice(0, 3) : "无数据");
+    
+    window.equityChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        datasets: [{
+          label: '资金曲线',
+          data: dataPoints,
+          borderColor: 'rgb(59, 130, 246)',
+          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderWidth: 2,
+          fill: true,
+          tension: 0.1
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          tooltip: {
+            mode: 'index',
+            intersect: false,
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) {
+                  label += ': ';
+                }
+                if (context.parsed.y !== null) {
+                  label += new Intl.NumberFormat('zh-CN', {
+                    style: 'currency',
+                    currency: 'CNY',
+                    minimumFractionDigits: 2
+                  }).format(context.parsed.y);
+                }
+                return label;
+              }
+            }
+          },
+          legend: {
+            display: true,
+            position: 'top',
+          }
+        },
+        scales: {
+          x: {
+            type: 'time',
+            time: {
+              unit: 'month',
+              displayFormats: {
+                month: 'yyyy-MM'
+              },
+              tooltipFormat: 'yyyy-MM-dd'
+            },
+            title: {
+              display: true,
+              text: '日期'
+            }
+          },
+          y: {
+            title: {
+              display: true,
+              text: '资金 (元)'
+            },
+            ticks: {
+              callback: function(value) {
+                return new Intl.NumberFormat('zh-CN', {
+                  style: 'currency',
+                  currency: 'CNY',
+                  minimumFractionDigits: 0
+                }).format(value);
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+  
+  // 填充交易明细表格
+  function populateTradesTable(trades) {
+    const tableBody = document.getElementById('trades-table');
+    tableBody.innerHTML = '';
+    
+    // 跟踪持仓数量和持仓金额
+    let currentPosition = 0;
+    
+    trades.forEach(trade => {
+      const row = document.createElement('tr');
+      
+      // 修改买入卖出样式和箭头方向
+      let typeHtml = '';
+      if (trade.type === '买入') {
+        // 买入：绿色，向下箭头
+        typeHtml = `<span class="text-green-600 flex items-center">↓ ${trade.type}</span>`;
+        currentPosition += parseInt(trade.quantity);
+      } else {
+        // 卖出：红色，向上箭头
+        typeHtml = `<span class="text-red-600 flex items-center">↑ ${trade.type}</span>`;
+        currentPosition -= parseInt(trade.quantity);
+      }
+      
+      // 修改利润显示颜色
+      let profitHtml = trade.profit;
+      if (trade.type === '卖出') {
+        // 确保卖出显示为红色正值
+        const profitValue = parseFloat(trade.profit);
+        if (profitValue < 0) {
+          profitHtml = `<span class="text-red-600">${Math.abs(profitValue).toFixed(2)}</span>`;
+        } else {
+          profitHtml = `<span class="text-red-600">${profitValue.toFixed(2)}</span>`;
+        }
+      }
+      
+      // 计算当前持仓金额
+      const price = parseFloat(trade.price);
+      const positionValue = (currentPosition * price).toFixed(2);
+      
+      row.innerHTML = `
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${trade.date}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${typeHtml}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${trade.price}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${trade.quantity}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${trade.amount}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm">${profitHtml}</td>
+        <td class="px-4 py-2 whitespace-nowrap text-sm text-blue-600 font-medium">${positionValue}</td>
+      `;
+      
+      tableBody.appendChild(row);
+    });
+  }
+  
+  // 导出交易记录到CSV
+  function exportToCSV() {
+    const tableBody = document.getElementById('trades-table');
+    if (!tableBody.rows.length) return;
+    
+    let csvContent = "日期,类型,价格,数量,金额,利润,持仓金额\n";
+    
+    for (let i = 0; i < tableBody.rows.length; i++) {
+      let row = tableBody.rows[i];
+      let rowData = [];
+      
+      // 获取每个单元格的文本内容（忽略HTML标签）
+      for (let j = 0; j < row.cells.length; j++) {
+        let cellText = row.cells[j].textContent.trim();
+        rowData.push(`"${cellText}"`);
+      }
+      
+      csvContent += rowData.join(',') + '\n';
+    }
+    
+    // 创建下载链接
+    const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `ETF_回测交易记录_${document.getElementById('etf-select').value}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+});
+</script>
+{% endblock %} 

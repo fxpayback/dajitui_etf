@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}{{ user.username }}的投资组合 - 管理员控制台{% endblock %}
+
+{% block content %}
+<!-- 标题 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800">{{ user.username }}的投资组合</h1>
+            <p class="text-gray-600 mt-1">用户ID: {{ user.id }} | 邮箱: {{ user.email }}</p>
+        </div>
+        <div class="flex space-x-2">
+            <a href="{{ url_for('admin_console') }}" class="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-2 rounded-lg transition duration-300 flex items-center">
+                <i class="fas fa-arrow-left mr-1"></i> 返回用户管理
+            </a>
+        </div>
+    </div>
+    
+    <div class="bg-blue-50 rounded p-4 border border-blue-100">
+        <p class="text-gray-700"><i class="fas fa-info-circle text-blue-500 mr-2"></i> 您正在以管理员身份查看该用户的投资组合列表。</p>
+    </div>
+</div>
+
+<!-- 投资组合列表 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+    <div class="flex justify-between items-center mb-6">
+        <h2 class="text-xl font-bold text-gray-800">投资组合列表</h2>
+        
+        {% if portfolios %}
+        <div class="flex items-center text-sm text-gray-500">
+            <i class="fas fa-folder mr-2"></i> 共 {{ portfolios|length }} 个投资组合
+        </div>
+        {% endif %}
+    </div>
+    
+    {% if portfolios %}
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+        {% for portfolio in portfolios %}
+        <div class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow duration-300">
+            <div class="bg-gray-50 p-4 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <h3 class="font-bold text-gray-800">{{ portfolio.name }}</h3>
+                    <span class="text-xs text-gray-500">{{ portfolio.created_at[:10] if portfolio.created_at else '无日期' }}</span>
+                </div>
+                {% if portfolio.description %}
+                <p class="text-gray-600 text-sm mt-2 truncate">{{ portfolio.description }}</p>
+                {% endif %}
+            </div>
+            <div class="p-4">
+                <div class="flex items-center justify-between text-sm mb-3">
+                    <span class="text-gray-600">总金额: </span>
+                    <span class="font-semibold">¥{{ "{:,.2f}".format(portfolio.total_amount) if portfolio.total_amount else "未设置" }}</span>
+                </div>
+                <div class="flex items-center justify-between text-sm mb-3">
+                    <span class="text-gray-600">ETF数量: </span>
+                    <span class="font-semibold">{{ portfolio.etf_count }}</span>
+                </div>
+                
+                <div class="border-t border-gray-200 pt-3 mt-3 flex justify-between">
+                    <button class="view-portfolio-btn text-blue-600 hover:text-blue-800 text-sm flex items-center" data-id="{{ portfolio.id }}">
+                        <i class="fas fa-eye mr-1"></i> 查看详情
+                    </button>
+                    <button class="delete-portfolio-btn text-red-600 hover:text-red-800 text-sm flex items-center" data-id="{{ portfolio.id }}" data-name="{{ portfolio.name }}">
+                        <i class="fas fa-trash-alt mr-1"></i> 删除
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-gray-50 rounded-lg p-8 text-center">
+        <div class="text-gray-400 mb-3">
+            <i class="fas fa-folder-open text-4xl"></i>
+        </div>
+        <h3 class="text-gray-700 font-medium mb-2">暂无投资组合</h3>
+        <p class="text-gray-500 text-sm">该用户尚未创建任何投资组合</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 删除确认模态框 -->
+<div id="delete-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-xl font-bold text-gray-800">确认删除</h3>
+            <button id="close-delete-modal" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        
+        <p class="text-gray-600 mb-6">您确定要删除投资组合 "<span id="portfolio-name-display" class="font-medium"></span>" 吗？此操作不可撤销。</p>
+        
+        <div class="flex justify-end space-x-3">
+            <button id="cancel-delete" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition duration-300">
+                取消
+            </button>
+            <button id="confirm-delete" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition duration-300">
+                删除
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 变量定义
+        const deleteModal = document.getElementById('delete-modal');
+        const closeDeleteModalBtn = document.getElementById('close-delete-modal');
+        const cancelDelete = document.getElementById('cancel-delete');
+        const confirmDelete = document.getElementById('confirm-delete');
+        const portfolioNameDisplay = document.getElementById('portfolio-name-display');
+        
+        let deletePortfolioId = null;
+        
+        // 函数定义
+        function closeDeleteModal() {
+            deleteModal.classList.add('hidden');
+            deletePortfolioId = null;
+        }
+        
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = type === 'success' 
+                ? 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50'
+                : 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+            notification.textContent = message;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.remove();
+            }, 3000);
+        }
+        
+        // 事件监听器
+        closeDeleteModalBtn.addEventListener('click', closeDeleteModal);
+        cancelDelete.addEventListener('click', closeDeleteModal);
+        
+        // 确认删除投资组合
+        confirmDelete.addEventListener('click', function() {
+            if (!deletePortfolioId) return;
+            
+            fetch(`/api/admin/portfolios/${deletePortfolioId}`, {
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-Token': '{{ csrf_token }}'
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('删除失败');
+                }
+                return response.json();
+            })
+            .then(data => {
+                closeDeleteModal();
+                showNotification(data.message, 'success');
+                
+                // 刷新页面
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
+            })
+            .catch(error => {
+                showNotification('删除失败: ' + error.message, 'error');
+            });
+        });
+        
+        // 使用事件委托处理按钮点击
+        document.addEventListener('click', function(event) {
+            // 查看投资组合详情
+            if (event.target.closest('.view-portfolio-btn')) {
+                const button = event.target.closest('.view-portfolio-btn');
+                const portfolioId = button.getAttribute('data-id');
+                console.log('查看投资组合', portfolioId);
+                window.location.href = `{{ url_for('admin_view_portfolio', portfolio_id=0) }}`.replace('0', portfolioId);
+            }
+            
+            // 删除投资组合
+            if (event.target.closest('.delete-portfolio-btn')) {
+                const button = event.target.closest('.delete-portfolio-btn');
+                deletePortfolioId = button.getAttribute('data-id');
+                const portfolioName = button.getAttribute('data-name');
+                console.log('删除投资组合', deletePortfolioId, portfolioName);
+                portfolioNameDisplay.textContent = portfolioName;
+                deleteModal.classList.remove('hidden');
+            }
+        });
+    });
+</script>
+{% endblock %}

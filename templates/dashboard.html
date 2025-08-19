@@ -1,0 +1,739 @@
+{% extends "base.html" %}
+
+{% block title %}ETF数据仪表盘 - ETF网格交易助手{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- ETF选择器 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+    <h1 class="text-xl md:text-2xl font-bold text-gray-800 mb-3 md:mb-4">ETF数据仪表盘</h1>
+    
+    <!-- 桌面版选择器 -->
+    <div class="hidden md:flex md:flex-wrap md:items-center">
+        <label for="etf-selector-desktop" class="mr-2 font-medium text-gray-700">选择ETF:</label>
+        <select id="etf-selector-desktop" class="form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 mr-4">
+            {% for symbol in symbols %}
+            <option value="{{ symbol.code }}" {% if symbol.code == selected %}selected{% endif %}>
+                {{ symbol.name }} ({{ symbol.code }})
+            </option>
+            {% endfor %}
+        </select>
+        <button id="refresh-btn-desktop" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-sync-alt mr-2"></i> 实时刷新
+        </button>
+        <div id="data-timestamp-desktop" class="ml-4 text-sm text-gray-500 italic">
+            数据更新时间: --
+        </div>
+    </div>
+    
+    <!-- 移动版选择器 -->
+    <div class="flex flex-col md:hidden">
+        <div class="mb-3">
+            <label for="etf-selector-mobile" class="block mb-2 text-sm font-medium text-gray-700">选择ETF:</label>
+            <select id="etf-selector-mobile" class="w-full form-select rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring focus:ring-blue-200 focus:ring-opacity-50 py-2 px-3 text-sm">
+                {% for symbol in symbols %}
+                <option value="{{ symbol.code }}" {% if symbol.code == selected %}selected{% endif %}>
+                    {{ symbol.name }} ({{ symbol.code }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="flex items-center justify-between">
+            <button id="refresh-btn-mobile" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+                <i class="fas fa-sync-alt mr-2"></i> 实时刷新
+            </button>
+            <div id="data-timestamp-mobile" class="text-xs text-gray-500 italic">
+                数据更新时间: --
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 加载指示器 -->
+<div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+    <div class="bg-white p-4 md:p-5 rounded-lg flex flex-col items-center">
+        <div class="animate-spin rounded-full h-10 w-10 md:h-12 md:w-12 border-t-2 border-b-2 border-blue-500 mb-3"></div>
+        <p class="text-gray-700 text-sm md:text-base">正在加载数据，请稍候...</p>
+    </div>
+</div>
+
+<!-- 数据卡片 -->
+<div id="data-cards" class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
+    <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-medium text-gray-700">当前价格</h3>
+            <div class="bg-blue-100 rounded-full p-1 md:p-2">
+                <i class="fas fa-dollar-sign text-blue-600 text-sm md:text-base"></i>
+            </div>
+        </div>
+        <p id="current-price" class="text-xl md:text-3xl font-bold text-gray-800">--</p>
+        <p id="price-change" class="text-xs md:text-sm mt-1 md:mt-2">
+            <span class="text-green-600"><i class="fas fa-caret-up"></i> --</span>
+            <span class="text-gray-500">较昨日</span>
+        </p>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-medium text-gray-700">波动率</h3>
+            <div class="bg-purple-100 rounded-full p-1 md:p-2">
+                <i class="fas fa-chart-line text-purple-600 text-sm md:text-base"></i>
+            </div>
+        </div>
+        <p id="volatility" class="text-xl md:text-3xl font-bold text-gray-800">--</p>
+        <p class="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">200日年化波动率</p>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-medium text-gray-700">网格间隔</h3>
+            <div class="bg-indigo-100 rounded-full p-1 md:p-2">
+                <i class="fas fa-th text-indigo-600 text-sm md:text-base"></i>
+            </div>
+        </div>
+        <p id="grid-spacing" class="text-xl md:text-3xl font-bold text-gray-800">--</p>
+        <p class="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">波动率/8</p>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+        <div class="flex items-center justify-between mb-2 md:mb-4">
+            <h3 class="text-sm md:text-lg font-medium text-gray-700">建议仓位</h3>
+            <div class="bg-green-100 rounded-full p-1 md:p-2">
+                <i class="fas fa-balance-scale text-green-600 text-sm md:text-base"></i>
+            </div>
+        </div>
+        <p id="position" class="text-xl md:text-3xl font-bold text-gray-800">--</p>
+        <p id="position-desc" class="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">--</p>
+    </div>
+</div>
+
+<!-- 网格区间可视化 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+    <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">网格区间</h2>
+    <div class="relative h-16 md:h-20 bg-gray-200 rounded-lg overflow-hidden mb-3 md:mb-4">
+        <div id="grid-range-bar" class="absolute h-full bg-blue-100"></div>
+        <div id="current-price-marker" class="absolute w-1 h-full bg-red-500"></div>
+        <div id="upper-limit-text" class="absolute top-0 right-0 p-1 md:p-2 text-xs md:text-sm font-medium">上限: --</div>
+        <div id="lower-limit-text" class="absolute top-0 left-0 p-1 md:p-2 text-xs md:text-sm font-medium">下限: --</div>
+    </div>
+    <div class="grid grid-cols-3 gap-2 md:gap-4 text-center">
+        <div>
+            <p class="text-xs md:text-sm text-gray-500">网格区间</p>
+            <p id="range-percentage" class="font-bold text-gray-800 text-sm md:text-base">--</p>
+        </div>
+        <div>
+            <p class="text-xs md:text-sm text-gray-500">网格层数</p>
+            <p id="grid-levels" class="font-bold text-gray-800 text-sm md:text-base">--</p>
+        </div>
+        <div>
+            <p class="text-xs md:text-sm text-gray-500">当前层数</p>
+            <p id="current-level" class="font-bold text-gray-800 text-sm md:text-base">--</p>
+        </div>
+    </div>
+</div>
+
+<!-- ETF特性信息 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+    <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">ETF特性分析</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+        <!-- 左侧：基本特性 -->
+        <div>
+            <div class="grid grid-cols-2 gap-2 md:gap-4">
+                <div class="bg-blue-50 rounded-lg p-3 md:p-4 border border-blue-100">
+                    <h3 class="text-xs md:text-sm font-medium text-gray-500 mb-1">类别</h3>
+                    <p id="etf-category" class="text-sm md:text-lg font-bold text-gray-800">--</p>
+                </div>
+                <div class="bg-purple-50 rounded-lg p-3 md:p-4 border border-purple-100">
+                    <h3 class="text-xs md:text-sm font-medium text-gray-500 mb-1">波动特性</h3>
+                    <p id="etf-volatility-type" class="text-sm md:text-lg font-bold text-gray-800">--</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-3 md:p-4 border border-green-100">
+                    <h3 class="text-xs md:text-sm font-medium text-gray-500 mb-1">建议权重</h3>
+                    <p id="etf-weight" class="text-sm md:text-lg font-bold text-gray-800">--</p>
+                </div>
+                <div class="bg-yellow-50 rounded-lg p-3 md:p-4 border border-yellow-100">
+                    <h3 class="text-xs md:text-sm font-medium text-gray-500 mb-1">相关性</h3>
+                    <p id="etf-correlation" class="text-sm md:text-lg font-bold text-gray-800">--</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右侧：波动特性解释 -->
+        <div class="bg-gray-50 rounded-lg p-3 md:p-4 border border-gray-200">
+            <h3 class="text-sm md:font-medium text-gray-700 mb-2">波动特性说明</h3>
+            <div class="space-y-1 md:space-y-2 text-xs md:text-sm">
+                <div class="flex items-center">
+                    <span class="inline-block w-16 md:w-20 font-medium">极低波动:</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5 md:h-2">
+                        <div class="bg-blue-400 h-1.5 md:h-2 rounded-full" style="width: 10%"></div>
+                    </div>
+                    <span class="ml-1 md:ml-2 text-xs text-gray-500 hidden md:inline">&lt; 5%</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-block w-16 md:w-20 font-medium">低波动:</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5 md:h-2">
+                        <div class="bg-green-400 h-1.5 md:h-2 rounded-full" style="width: 25%"></div>
+                    </div>
+                    <span class="ml-1 md:ml-2 text-xs text-gray-500 hidden md:inline">5-10%</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-block w-16 md:w-20 font-medium">中波动:</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5 md:h-2">
+                        <div class="bg-yellow-400 h-1.5 md:h-2 rounded-full" style="width: 50%"></div>
+                    </div>
+                    <span class="ml-1 md:ml-2 text-xs text-gray-500 hidden md:inline">10-15%</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-block w-16 md:w-20 font-medium">中高波动:</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5 md:h-2">
+                        <div class="bg-yellow-500 h-1.5 md:h-2 rounded-full" style="width: 70%"></div>
+                    </div>
+                    <span class="ml-1 md:ml-2 text-xs text-gray-500 hidden md:inline">15-20%</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-block w-16 md:w-20 font-medium">高波动:</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5 md:h-2">
+                        <div class="bg-red-400 h-1.5 md:h-2 rounded-full" style="width: 85%"></div>
+                    </div>
+                    <span class="ml-1 md:ml-2 text-xs text-gray-500 hidden md:inline">20-30%</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="inline-block w-16 md:w-20 font-medium">极高波动:</span>
+                    <div class="flex-1 bg-gray-200 rounded-full h-1.5 md:h-2">
+                        <div class="bg-red-600 h-1.5 md:h-2 rounded-full" style="width: 100%"></div>
+                    </div>
+                    <span class="ml-1 md:ml-2 text-xs text-gray-500 hidden md:inline">&gt; 30%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表 -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mb-6 md:mb-8">
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">价格走势</h2>
+        <canvas id="price-chart" height="200" class="md:h-250"></canvas>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">波动率与网格间隔</h2>
+        <canvas id="volatility-chart" height="200" class="md:h-250"></canvas>
+    </div>
+</div>
+
+<!-- 交易建议 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+    <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">交易建议</h2>
+    <div id="trading-advice" class="p-3 md:p-4 rounded-lg bg-blue-50 border border-blue-200">
+        <div class="flex items-start">
+            <div class="bg-blue-100 rounded-full p-1.5 md:p-2 mr-2 md:mr-3">
+                <i class="fas fa-lightbulb text-blue-600 text-sm md:text-base"></i>
+            </div>
+            <div>
+                <h3 id="advice-title" class="font-bold text-gray-800 mb-1 md:mb-2 text-sm md:text-base">加载中...</h3>
+                <p id="advice-content" class="text-gray-600 text-xs md:text-sm">正在分析数据，请稍候...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- 错误提示 -->
+<div id="error-message" class="hidden fixed bottom-4 right-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-3 md:p-4 rounded shadow-md z-50 text-xs md:text-sm max-w-xs md:max-w-md">
+    <div class="flex">
+        <div class="flex-shrink-0">
+            <i class="fas fa-exclamation-circle text-red-500"></i>
+        </div>
+        <div class="ml-2 md:ml-3">
+            <p class="text-xs md:text-sm" id="error-text">出错了</p>
+        </div>
+        <div class="ml-auto pl-2 md:pl-3">
+            <button type="button" onclick="document.getElementById('error-message').classList.add('hidden')" class="text-red-500 hover:text-red-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// 调试模式开关
+const DEBUG_MODE = true;
+
+function log(...args) {
+    if (DEBUG_MODE) {
+        console.log(...args);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // 桌面版和移动版选择器
+    const etfSelectorDesktop = document.getElementById('etf-selector-desktop');
+    const etfSelectorMobile = document.getElementById('etf-selector-mobile');
+    const refreshBtnDesktop = document.getElementById('refresh-btn-desktop');
+    const refreshBtnMobile = document.getElementById('refresh-btn-mobile');
+    const loading = document.getElementById('loading');
+    const dataCards = document.getElementById('data-cards');
+    const dataTimestampDesktop = document.getElementById('data-timestamp-desktop');
+    const dataTimestampMobile = document.getElementById('data-timestamp-mobile');
+    let priceChart = null;
+    let volatilityChart = null;
+    
+    // 显示数据状态信息
+    {% if data_status %}
+    const dataStatus = "{{ data_status }}";
+    if (dataStatus === "数据已更新") {
+        // 数据更新闪烁效果
+        dataTimestampDesktop.classList.add('text-green-600', 'font-bold');
+        dataTimestampMobile.classList.add('text-green-600', 'font-bold');
+        dataTimestampDesktop.textContent = "数据更新时间: 数据刚刚已更新 ⚡";
+        dataTimestampMobile.textContent = "数据更新时间: 数据刚刚已更新 ⚡";
+        
+        // 3秒后恢复正常
+        setTimeout(() => {
+            dataTimestampDesktop.classList.remove('text-green-600', 'font-bold');
+            dataTimestampMobile.classList.remove('text-green-600', 'font-bold');
+        }, 3000);
+    } else if (dataStatus === "更新失败") {
+        dataTimestampDesktop.classList.add('text-red-600');
+        dataTimestampMobile.classList.add('text-red-600');
+        dataTimestampDesktop.textContent = "数据更新时间: 更新失败，使用本地数据";
+        dataTimestampMobile.textContent = "数据更新时间: 更新失败，使用本地数据";
+    }
+    {% endif %}
+    
+    // 初始加载数据
+    loadETFData(etfSelectorDesktop ? etfSelectorDesktop.value : etfSelectorMobile.value, false);
+    
+    // 桌面版选择ETF变化时加载数据
+    if (etfSelectorDesktop) {
+        etfSelectorDesktop.addEventListener('change', function() {
+            const selectedValue = this.value;
+            if (etfSelectorMobile) etfSelectorMobile.value = selectedValue;
+            loadETFData(selectedValue, false);
+            updateUrl(selectedValue);
+        });
+    }
+    
+    // 移动版选择ETF变化时加载数据
+    if (etfSelectorMobile) {
+        etfSelectorMobile.addEventListener('change', function() {
+            const selectedValue = this.value;
+            if (etfSelectorDesktop) etfSelectorDesktop.value = selectedValue;
+            loadETFData(selectedValue, false);
+            updateUrl(selectedValue);
+        });
+    }
+    
+    // 更新URL，不刷新页面
+    function updateUrl(symbol) {
+        const url = new URL(window.location);
+        url.searchParams.set('symbol', symbol);
+        window.history.pushState({}, '', url);
+    }
+    
+    // 桌面版刷新按钮点击事件
+    if (refreshBtnDesktop) {
+        refreshBtnDesktop.addEventListener('click', function() {
+            loadETFData(etfSelectorDesktop ? etfSelectorDesktop.value : etfSelectorMobile.value, true);
+        });
+    }
+    
+    // 移动版刷新按钮点击事件
+    if (refreshBtnMobile) {
+        refreshBtnMobile.addEventListener('click', function() {
+            loadETFData(etfSelectorMobile ? etfSelectorMobile.value : etfSelectorDesktop.value, true);
+        });
+    }
+    
+    function loadETFData(symbol, forceRefresh) {
+        log(`正在获取ETF数据: ${symbol}, 强制刷新: ${forceRefresh}`);
+        // 显示加载指示器
+        loading.classList.remove('hidden');
+        dataCards.classList.add('opacity-50');
+        
+        console.log(`正在获取ETF数据: ${symbol}, 强制刷新: ${forceRefresh}`); // 添加调试日志
+        
+        // 添加时间戳防止缓存
+        const timestamp = new Date().getTime();
+        const url = `/api/etf/${symbol}?_=${timestamp}&force_refresh=${forceRefresh}`;
+        
+        fetch(url)
+            .then(response => {
+                console.log('API响应状态:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP错误! 状态: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('获取到的数据:', data); // 添加调试日志
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                updateDashboard(data);
+                // 隐藏加载指示器
+                loading.classList.add('hidden');
+                dataCards.classList.remove('opacity-50');
+                
+                // 更新数据时间戳显示
+                let timestampText = '数据更新时间: ';
+                if (data.data_timestamp) {
+                    timestampText += data.data_timestamp;
+                    if (data.is_cached) {
+                        timestampText += ' (本地缓存)';
+                    } else {
+                        timestampText += ' (实时数据)';
+                    }
+                } else {
+                    timestampText += new Date().toLocaleString();
+                }
+                dataTimestampDesktop.textContent = timestampText;
+                dataTimestampMobile.textContent = timestampText;
+            })
+            .catch(error => {
+                console.error('获取数据错误:', error);
+                showError(`获取数据失败: ${error.message}`);
+                loading.classList.add('hidden');
+                dataCards.classList.remove('opacity-50');
+                
+                // 重置显示
+                document.getElementById('current-price').textContent = '--';
+                document.getElementById('volatility').textContent = '--';
+                document.getElementById('grid-spacing').textContent = '--';
+                document.getElementById('position').textContent = '--';
+                document.getElementById('upper-limit-text').textContent = '上限: --';
+                document.getElementById('lower-limit-text').textContent = '下限: --';
+                document.getElementById('range-percentage').textContent = '--';
+                document.getElementById('grid-levels').textContent = '--';
+                document.getElementById('current-level').textContent = '--';
+                document.getElementById('position-desc').textContent = '--';
+                document.getElementById('advice-title').textContent = '无法获取数据';
+                document.getElementById('advice-content').textContent = '获取ETF数据失败，请检查网络连接或稍后重试。';
+                
+                // 更新时间戳显示
+                dataTimestampDesktop.textContent = '数据更新时间: 获取失败';
+                dataTimestampMobile.textContent = '数据更新时间: 获取失败';
+            });
+    }
+    function updateDashboard(data) {
+        try {
+            // 检查数据是否有效
+            if (!data || typeof data !== 'object') {
+                console.error('收到无效数据:', data);
+                alert('获取数据失败: 服务器返回无效数据');
+                return;
+            }
+            
+            // 检查是否有错误信息
+            if (data.error) {
+                console.error('API返回错误:', data.error);
+                alert(`获取数据失败: ${data.error}`);
+                return;
+            }
+            
+            // 更新数据卡片 - 格式化波动率为两位小数
+            document.getElementById('current-price').textContent = data.current_price || '--';
+            document.getElementById('volatility').textContent = (data.volatility ? `${parseFloat(data.volatility).toFixed(2)}%` : '--');
+            document.getElementById('grid-spacing').textContent = (data.grid_spacing ? `${parseFloat(data.grid_spacing).toFixed(2)}%` : '--');
+            document.getElementById('position').textContent = (data.position ? `${data.position}%` : '--');
+            
+            // 更新价格变动（如果有历史数据）
+            if (data.historical_data && data.historical_data.prices && data.historical_data.prices.length >= 2) {
+                const currentPrice = data.current_price;
+                const yesterdayPrice = data.historical_data.prices[data.historical_data.prices.length - 2];
+                const priceChange = currentPrice - yesterdayPrice;
+                const priceChangePercent = (priceChange / yesterdayPrice * 100).toFixed(2);
+                
+                const priceChangeElement = document.getElementById('price-change');
+                if (priceChange > 0) {
+                    // 上涨用红色
+                    priceChangeElement.innerHTML = `
+                        <span class="text-red-600"><i class="fas fa-caret-up"></i> ${priceChangePercent}%</span>
+                        <span class="text-gray-500">较昨日</span>
+                    `;
+                } else if (priceChange < 0) {
+                    // 下跌用绿色
+                    priceChangeElement.innerHTML = `
+                        <span class="text-green-600"><i class="fas fa-caret-down"></i> ${Math.abs(priceChangePercent)}%</span>
+                        <span class="text-gray-500">较昨日</span>
+                    `;
+                } else {
+                    // 持平用灰色
+                    priceChangeElement.innerHTML = `
+                        <span class="text-gray-600"><i class="fas fa-minus"></i> 0.00%</span>
+                        <span class="text-gray-500">较昨日</span>
+                    `;
+                }
+            }
+            
+            // 更新网格区间 - 格式化上下限为两位小数
+            const upperLimit = data.upper_limit ? parseFloat(data.upper_limit).toFixed(2) : '--';
+            const lowerLimit = data.lower_limit ? parseFloat(data.lower_limit).toFixed(2) : '--';
+            document.getElementById('upper-limit-text').textContent = `上限: ${upperLimit}`;
+            document.getElementById('lower-limit-text').textContent = `下限: ${lowerLimit}`;
+            document.getElementById('range-percentage').textContent = (data.range_percentage ? `${parseFloat(data.range_percentage).toFixed(2)}%` : '--');
+            document.getElementById('grid-levels').textContent = data.grid_levels || '--';
+            document.getElementById('current-level').textContent = (data.current_level !== undefined && data.grid_levels !== undefined) ? 
+                `${data.current_level} / ${data.grid_levels}` : '--';
+            
+            // 更新网格区间可视化
+            const rangeBar = document.getElementById('grid-range-bar');
+            const priceMarker = document.getElementById('current-price-marker');
+            
+            // 安全地计算当前价格在区间中的位置百分比
+            let clampedPosition = 0.5; // 默认在中间
+            if (data.current_price !== undefined && data.upper_limit !== undefined && data.lower_limit !== undefined) {
+                const range = data.upper_limit - data.lower_limit;
+                if (range > 0) {
+                    const position = (data.current_price - data.lower_limit) / range;
+                    clampedPosition = Math.max(0, Math.min(1, position));
+                }
+            }
+            
+            rangeBar.style.left = '0%';
+            rangeBar.style.width = '100%';
+            priceMarker.style.left = `${clampedPosition * 100}%`;
+            
+            // 更新仓位描述
+            let positionDesc = '--';
+            if (data.position !== undefined) {
+                if (data.position >= 80) {
+                    positionDesc = '重仓买入区域';
+                } else if (data.position >= 60) {
+                    positionDesc = '适度买入区域';
+                } else if (data.position >= 40) {
+                    positionDesc = '中性持仓区域';
+                } else if (data.position >= 20) {
+                    positionDesc = '适度减仓区域';
+                } else {
+                    positionDesc = '重度减仓区域';
+                }
+            }
+            document.getElementById('position-desc').textContent = positionDesc;
+            
+            // 更新ETF特性信息
+            document.getElementById('etf-category').textContent = data.category || '--';
+            document.getElementById('etf-volatility-type').textContent = data.volatility_type || '--';
+            document.getElementById('etf-weight').textContent = data.weight || '--';
+            document.getElementById('etf-correlation').textContent = data.correlation || '--';
+            
+            // 高亮当前ETF的波动特性
+            const volatilityTypes = ['极低波动', '低波动', '中波动', '中高波动', '高波动', '极高波动'];
+            volatilityTypes.forEach((type, index) => {
+                const bar = document.querySelector(`.space-y-2 .flex:nth-child(${index + 1}) .bg-gray-200 div`);
+                if (bar) {
+                    if (data.volatility_type === type) {
+                        bar.classList.add('animate-pulse');
+                        bar.parentElement.parentElement.classList.add('bg-blue-50');
+                    } else {
+                        bar.classList.remove('animate-pulse');
+                        bar.parentElement.parentElement.classList.remove('bg-blue-50');
+                    }
+                }
+            });
+            
+            // 更新交易建议
+            let adviceTitle = '建议: 数据分析中';
+            let adviceContent = '正在分析数据，请稍候...';
+            
+            if (data.position !== undefined && data.name !== undefined) {
+                if (data.position >= 80) {
+                    adviceTitle = '建议: 积极买入';
+                    adviceContent = `${data.name}当前处于低估区域，建议积极买入。当前网格位置处于第${data.current_level}层（共${data.grid_levels}层），建议仓位${data.position}%。`;
+                } else if (data.position >= 60) {
+                    adviceTitle = '建议: 逐步买入';
+                    adviceContent = `${data.name}当前处于偏低区域，建议逐步买入。当前网格位置处于第${data.current_level}层（共${data.grid_levels}层），建议仓位${data.position}%。`;
+                } else if (data.position >= 40) {
+                    adviceTitle = '建议: 持仓观望';
+                    adviceContent = `${data.name}当前处于中性区域，建议持仓观望。当前网格位置处于第${data.current_level}层（共${data.grid_levels}层），建议仓位${data.position}%。`;
+                } else if (data.position >= 20) {
+                    adviceTitle = '建议: 逐步减仓';
+                    adviceContent = `${data.name}当前处于偏高区域，建议逐步减仓。当前网格位置处于第${data.current_level}层（共${data.grid_levels}层），建议仓位${data.position}%。`;
+                } else {
+                    adviceTitle = '建议: 大幅减仓';
+                    adviceContent = `${data.name}当前处于高估区域，建议大幅减仓。当前网格位置处于第${data.current_level}层（共${data.grid_levels}层），建议仓位${data.position}%。`;
+                }
+            }
+            
+            document.getElementById('advice-title').textContent = adviceTitle;
+            document.getElementById('advice-content').textContent = adviceContent;
+            
+            // 更新图表
+            if (data.historical_data && 
+                data.historical_data.dates && 
+                data.historical_data.prices && 
+                data.historical_data.volatility && 
+                data.historical_data.grid_spacing) {
+                updateCharts(data);
+            } else {
+                console.warn('历史数据不完整，无法更新图表');
+            }
+        } catch (error) {
+            console.error('更新仪表盘时出错:', error);
+            alert(`更新数据显示失败: ${error.message}`);
+        }
+    }
+    function updateCharts(data) {
+        const dates = data.historical_data.dates;
+        const prices = data.historical_data.prices;
+        const volatility = data.historical_data.volatility;
+        const gridSpacing = data.historical_data.grid_spacing;
+        
+        // 计算历史仓位数据（如果API没有直接提供）
+        let positions = [];
+        if (data.historical_data.positions) {
+            positions = data.historical_data.positions;
+        } else {
+            // 根据历史价格、上限和下限估算历史仓位
+            for (let i = 0; i < dates.length; i++) {
+                const histPrice = prices[i];
+                const range = data.upper_limit - data.lower_limit;
+                if (range <= 0 || histPrice <= data.lower_limit) {
+                    positions.push(100); // 最低价位，满仓
+                } else if (histPrice >= data.upper_limit) {
+                    positions.push(0);   // 最高价位，空仓
+                } else {
+                    // 线性插值计算仓位
+                    const level = (histPrice - data.lower_limit) / range;
+                    const position = Math.round((1 - level) * 100);
+                    positions.push(Math.max(0, Math.min(100, position)));
+                }
+            }
+        }
+        
+        // 价格图表
+        if (priceChart) {
+            priceChart.destroy();
+        }
+        
+        const priceCtx = document.getElementById('price-chart').getContext('2d');
+        priceChart = new Chart(priceCtx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [{
+                    label: '价格',
+                    data: prices,
+                    borderColor: 'rgb(59, 130, 246)',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false
+                    }
+                }
+            }
+        });
+        
+        // 波动率、网格间隔和仓位图表
+        if (volatilityChart) {
+            volatilityChart.destroy();
+        }
+        
+        const volatilityCtx = document.getElementById('volatility-chart').getContext('2d');
+        volatilityChart = new Chart(volatilityCtx, {
+            type: 'line',
+            data: {
+                labels: dates,
+                datasets: [
+                    {
+                        label: '波动率 (%)',
+                        data: volatility,
+                        borderColor: 'rgb(139, 92, 246)',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        borderWidth: 2,
+                        yAxisID: 'y',
+                        fill: false,
+                        tension: 0.1
+                    },
+                    {
+                        label: '网格间隔 (%)',
+                        data: gridSpacing,
+                        borderColor: 'rgb(79, 70, 229)',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        borderWidth: 2,
+                        yAxisID: 'y',
+                        fill: false,
+                        tension: 0.1
+                    },
+                    {
+                        label: '建议仓位 (%)',
+                        data: positions,
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        borderWidth: 2,
+                        yAxisID: 'y',
+                        fill: false,
+                        tension: 0.1,
+                        borderDash: [5, 5] // 使用虚线区分
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y.toFixed(1) + '%';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        title: {
+                            display: true,
+                            text: '百分比 (%)'
+                        },
+                        suggestedMin: 0,
+                        suggestedMax: 100
+                    }
+                }
+            }
+        });
+    }
+    // 添加显示错误信息的函数
+    function showError(message) {
+        const errorElement = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        errorText.textContent = message;
+        errorElement.classList.remove('hidden');
+        
+        // 5秒后自动隐藏
+        setTimeout(() => {
+            errorElement.classList.add('hidden');
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}

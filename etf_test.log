@@ -1,0 +1,76 @@
+2025-03-31 14:37:52,353 - INFO - 开始测试 - 2025-03-31 14:37:52.353410
+2025-03-31 14:37:52,353 - INFO - Python版本: 3.12.5 (main, Mar 15 2025, 09:18:22) [GCC 12.3.1 20230912 (OpenCloudOS 12.3.1.1-1)]
+2025-03-31 14:37:52,353 - INFO - 运行平台: linux
+2025-03-31 14:37:52,353 - INFO - 开始获取ETF 510200 的信息
+2025-03-31 14:37:52,353 - INFO - AKSHARE版本: 1.16.45
+2025-03-31 14:37:52,353 - INFO - 测试网络连接...
+2025-03-31 14:37:52,422 - INFO - 网络连接测试结果: 200
+2025-03-31 14:37:52,423 - INFO - 尝试获取ETF 510200 的基金信息...
+2025-03-31 14:37:53,348 - INFO - 成功获取ETF基金列表，共 385 条记录
+2025-03-31 14:37:53,348 - ERROR - 方法1出错: '基金代码'
+Traceback (most recent call last):
+  File "/www/server/pyporject_evn/etf-grid-app_venv/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3805, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7081, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7089, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: '基金代码'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/www/wwwroot/etf-grid-app/test_etf_name.py", line 42, in test_etf_name
+    etf_info = fund_list[fund_list['基金代码'] == symbol]
+                         ~~~~~~~~~^^^^^^^^^^^^
+  File "/www/server/pyporject_evn/etf-grid-app_venv/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/www/server/pyporject_evn/etf-grid-app_venv/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3812, in get_loc
+    raise KeyError(key) from err
+KeyError: '基金代码'
+2025-03-31 14:38:00,211 - INFO - 成功获取ETF实时行情，共 1080 条记录
+2025-03-31 14:38:00,215 - INFO - 方法2 - 在实时行情中找到ETF: 上证券商ETF
+2025-03-31 14:38:00,542 - INFO - 方法3 - 未获取到ETF 510200 的历史数据
+2025-03-31 14:38:00,543 - INFO - 获取ETF信息总耗时: 8.12 秒
+2025-03-31 14:38:00,543 - INFO - 测试完成
+2025-03-31 14:38:00,543 - INFO - --------------------------------------------------
+2025-03-31 14:38:27,064 - INFO - 开始测试 - 2025-03-31 14:38:27.064836
+2025-03-31 14:38:27,065 - INFO - Python版本: 3.12.5 (main, Mar 15 2025, 09:18:22) [GCC 12.3.1 20230912 (OpenCloudOS 12.3.1.1-1)]
+2025-03-31 14:38:27,065 - INFO - 运行平台: linux
+2025-03-31 14:38:27,065 - INFO - 开始获取ETF 510300 的信息
+2025-03-31 14:38:27,065 - INFO - AKSHARE版本: 1.16.45
+2025-03-31 14:38:27,065 - INFO - 测试网络连接...
+2025-03-31 14:38:27,129 - INFO - 网络连接测试结果: 200
+2025-03-31 14:38:27,129 - INFO - 尝试获取ETF 510300 的基金信息...
+2025-03-31 14:38:27,779 - INFO - 成功获取ETF基金列表，共 385 条记录
+2025-03-31 14:38:27,779 - ERROR - 方法1出错: '基金代码'
+Traceback (most recent call last):
+  File "/www/server/pyporject_evn/etf-grid-app_venv/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3805, in get_loc
+    return self._engine.get_loc(casted_key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "index.pyx", line 167, in pandas._libs.index.IndexEngine.get_loc
+  File "index.pyx", line 196, in pandas._libs.index.IndexEngine.get_loc
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7081, in pandas._libs.hashtable.PyObjectHashTable.get_item
+  File "pandas/_libs/hashtable_class_helper.pxi", line 7089, in pandas._libs.hashtable.PyObjectHashTable.get_item
+KeyError: '基金代码'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/www/wwwroot/etf-grid-app/test_etf_name.py", line 42, in test_etf_name
+    etf_info = fund_list[fund_list['基金代码'] == symbol]
+                         ~~~~~~~~~^^^^^^^^^^^^
+  File "/www/server/pyporject_evn/etf-grid-app_venv/lib/python3.12/site-packages/pandas/core/frame.py", line 4102, in __getitem__
+    indexer = self.columns.get_loc(key)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/www/server/pyporject_evn/etf-grid-app_venv/lib/python3.12/site-packages/pandas/core/indexes/base.py", line 3812, in get_loc
+    raise KeyError(key) from err
+KeyError: '基金代码'
+2025-03-31 14:38:39,117 - INFO - 成功获取ETF实时行情，共 1080 条记录
+2025-03-31 14:38:39,119 - INFO - 方法2 - 在实时行情中找到ETF: 沪深300ETF
+2025-03-31 14:38:39,434 - INFO - 方法3 - 未获取到ETF 510300 的历史数据
+2025-03-31 14:38:39,434 - INFO - 获取ETF信息总耗时: 12.30 秒
+2025-03-31 14:38:39,434 - INFO - 测试完成
+2025-03-31 14:38:39,434 - INFO - --------------------------------------------------

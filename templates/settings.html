@@ -1,0 +1,407 @@
+{% extends "base.html" %}
+
+{% block title %}个人设置 - ETF网格交易助手{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h1 class="text-2xl font-bold text-gray-800 mb-6">个人设置</h1>
+        
+        {% if message %}
+        <div class="{% if message_type == 'success' %}bg-green-100 border border-green-400 text-green-700{% else %}bg-red-100 border border-red-400 text-red-700{% endif %} px-4 py-3 rounded mb-4">
+            <p>{{ message }}</p>
+        </div>
+        {% endif %}
+        
+        <!-- 设置选项卡 -->
+        <div class="border-b border-gray-200 mb-6">
+            <ul class="flex flex-wrap -mb-px text-sm font-medium text-center">
+                <li class="mr-2">
+                    <a href="#profile" class="inline-block p-4 border-b-2 border-blue-600 rounded-t-lg active text-blue-600" id="profile-tab" data-tabs-target="profile">
+                        个人资料
+                    </a>
+                </li>
+                <li class="mr-2">
+                    <a href="#preferences" class="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300" id="preferences-tab" data-tabs-target="preferences">
+                        偏好设置
+                    </a>
+                </li>
+                <li>
+                    <a href="#security" class="inline-block p-4 border-b-2 border-transparent rounded-t-lg hover:text-gray-600 hover:border-gray-300" id="security-tab" data-tabs-target="security">
+                        账户安全
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- 个人资料 -->
+        <div id="profile" class="tab-content active">
+            <form method="post" action="{{ url_for('update_profile') }}" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="form_type" value="profile">
+                
+                <div class="flex flex-col md:flex-row md:items-center mb-6">
+                    <div class="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center mb-4 md:mb-0 md:mr-6">
+                        <span class="text-4xl text-gray-500">{{ user.username[0]|upper }}</span>
+                    </div>
+                    
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-800">{{ user.username }}</h2>
+                        <p class="text-gray-600">注册时间: {{ user.created_at }}</p>
+                        <p class="text-gray-600">上次登录: {{ user.last_login }}</p>
+                    </div>
+                </div>
+                
+                <div>
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                    <input type="text" id="username" name="username" value="{{ user.username }}" disabled
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-100">
+                    <p class="mt-1 text-xs text-gray-500">用户名创建后不可修改</p>
+                </div>
+                
+                <div>
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">电子邮箱</label>
+                    <input type="email" id="email" name="email" value="{{ user.email }}" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <button type="submit" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        保存修改
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- 偏好设置 -->
+        <div id="preferences" class="tab-content hidden">
+            <form method="post" action="{{ url_for('update_settings') }}" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="form_type" value="preferences">
+                
+                <div>
+                    <label for="theme" class="block text-sm font-medium text-gray-700 mb-1">界面主题</label>
+                    <select id="theme" name="theme" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="light" {% if settings.theme == 'light' %}selected{% endif %}>浅色模式</option>
+                        <option value="dark" {% if settings.theme == 'dark' %}selected{% endif %}>深色模式</option>
+                        <option value="auto" {% if settings.theme == 'auto' %}selected{% endif %}>跟随系统</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="default_view" class="block text-sm font-medium text-gray-700 mb-1">默认首页视图</label>
+                    <select id="default_view" name="default_view" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="dashboard" {% if settings.default_view == 'dashboard' %}selected{% endif %}>数据仪表盘</option>
+                        <option value="portfolio" {% if settings.default_view == 'portfolio' %}selected{% endif %}>投资组合</option>
+                        <option value="history" {% if settings.default_view == 'history' %}selected{% endif %}>历史数据</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="notification" class="block text-sm font-medium text-gray-700 mb-1">通知设置</label>
+                    <select id="notification" name="notification" 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="on" {% if settings.notification == 'on' %}selected{% endif %}>开启所有通知</option>
+                        <option value="important" {% if settings.notification == 'important' %}selected{% endif %}>仅重要通知</option>
+                        <option value="off" {% if settings.notification == 'off' %}selected{% endif %}>关闭所有通知</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <button type="submit" 
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        保存设置
+                    </button>
+                </div>
+            </form>
+            
+            <hr class="my-8">
+            
+            <!-- 自定义ETF添加部分 -->
+            <h3 class="text-lg font-semibold text-gray-800 mb-4">添加自定义ETF</h3>
+            <form method="post" action="{{ url_for('add_custom_etf') }}" id="add-etf-form" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                
+                <div>
+                    <label for="symbol" class="block text-sm font-medium text-gray-700 mb-1">ETF代码</label>
+                    <input type="text" id="symbol" name="symbol" required placeholder="例如: 159915"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">请输入有效的ETF或LOF代码</p>
+                </div>
+                
+                <div>
+                    <button type="submit" id="add-etf-btn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        添加ETF
+                    </button>
+                </div>
+            </form>
+            
+            <!-- ETF确认对话框 -->
+            <div id="etf-confirm-modal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">确认添加ETF</h3>
+                    <div id="etf-info" class="mb-6">
+                        <p class="text-gray-700 mb-2">您确定要添加以下ETF到自定义列表吗？</p>
+                        <div class="bg-gray-100 p-4 rounded-lg">
+                            <p><span class="font-semibold">名称:</span> <span id="etf-name"></span></p>
+                            <p><span class="font-semibold">代码:</span> <span id="etf-code"></span></p>
+                            <p><span class="font-semibold">当前价格:</span> <span id="etf-price"></span></p>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-add-etf-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">
+                            取消
+                        </button>
+                        <button type="button" id="confirm-add-etf-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                            确认添加
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 账户安全 -->
+        <div id="security" class="tab-content hidden">
+            <form method="post" action="{{ url_for('change_password') }}" class="space-y-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="hidden" name="form_type" value="change_password">
+                
+                <div>
+                    <label for="current_password" class="block text-sm font-medium text-gray-700 mb-1">当前密码</label>
+                    <input type="password" id="current_password" name="current_password" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <label for="new_password" class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+                    <input type="password" id="new_password" name="new_password" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <p class="mt-1 text-xs text-gray-500">至少8个字符，建议包含字母、数字和特殊符号</p>
+                </div>
+                
+                <div>
+                    <label for="confirm_new_password" class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+                    <input type="password" id="confirm_new_password" name="confirm_new_password" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <button type="submit" id="change-password-btn"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                        更改密码
+                    </button>
+                </div>
+            </form>
+            
+            <hr class="my-8">
+            
+            <div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-4">注销账户</h3>
+                <p class="text-red-600 mb-4">警告：注销账户将删除您的所有数据，此操作不可撤销。</p>
+                <button id="delete-account-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                    注销我的账户
+                </button>
+                
+                <!-- 确认对话框 -->
+                <div id="delete-account-confirm" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center">
+                    <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">确认注销账户</h3>
+                        <p class="text-gray-600 mb-6">您确定要永久删除您的账户和所有数据吗？此操作不可撤销。</p>
+                        <form method="post" action="{{ url_for('delete_account') }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="form_type" value="delete_account">
+                            
+                            <div class="mb-4">
+                                <label for="confirm_delete_password" class="block text-sm font-medium text-gray-700 mb-1">请输入您的密码以确认</label>
+                                <input type="password" id="confirm_delete_password" name="password" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                            
+                            <div class="flex justify-end space-x-3">
+                                <button type="button" id="cancel-delete-btn" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-4 rounded-lg transition duration-300">
+                                    取消
+                                </button>
+                                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">
+                                    确认注销
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 选项卡切换
+    const tabs = document.querySelectorAll('[data-tabs-target]');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabs.forEach(tab => {
+        tab.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const target = this.getAttribute('data-tabs-target');
+            
+            // 隐藏所有内容
+            tabContents.forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // 移除所有标签的激活状态
+            tabs.forEach(t => {
+                t.classList.remove('border-blue-600', 'text-blue-600', 'active');
+                t.classList.add('border-transparent', 'hover:text-gray-600', 'hover:border-gray-300');
+            });
+            
+            // 激活当前标签
+            this.classList.add('border-blue-600', 'text-blue-600', 'active');
+            this.classList.remove('border-transparent', 'hover:text-gray-600', 'hover:border-gray-300');
+            
+            // 显示当前内容
+            document.getElementById(target).classList.remove('hidden');
+        });
+    });
+    
+    // 密码修改验证
+    const changePasswordForm = document.querySelector('form[action="{{ url_for("change_password") }}"]');
+    if (changePasswordForm) {
+        changePasswordForm.addEventListener('submit', function(event) {
+            const newPassword = document.getElementById('new_password').value;
+            const confirmNewPassword = document.getElementById('confirm_new_password').value;
+            
+            if (newPassword !== confirmNewPassword) {
+                event.preventDefault();
+                alert('两次输入的新密码不一致，请重新输入');
+                return false;
+            }
+            
+            if (newPassword.length < 8) {
+                event.preventDefault();
+                alert('新密码长度必须至少为8个字符');
+                return false;
+            }
+            
+            return true;
+        });
+    }
+    
+    // 自定义ETF表单处理
+    const addEtfForm = document.getElementById('add-etf-form');
+    const etfConfirmModal = document.getElementById('etf-confirm-modal');
+    const cancelAddEtfBtn = document.getElementById('cancel-add-etf-btn');
+    const confirmAddEtfBtn = document.getElementById('confirm-add-etf-btn');
+    
+    if (addEtfForm) {
+        addEtfForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            const symbol = document.getElementById('symbol').value.trim();
+            
+            if (!symbol) {
+                alert('请输入ETF代码');
+                return;
+            }
+            
+            // 发送请求验证ETF信息
+            fetch(`/api/etf_info/${symbol}`)
+                .then(response => {
+                    // 检查响应状态码
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    console.log('获取ETF数据成功:', data);
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        // 显示确认对话框并填充ETF信息
+                        document.getElementById('etf-name').textContent = data.name || `${symbol} ETF`;
+                        document.getElementById('etf-code').textContent = symbol;
+                        document.getElementById('etf-price').textContent = data.price ? `¥${data.price}` : '数据获取中...';
+                        
+                        // 确保对话框显示
+                        etfConfirmModal.classList.remove('hidden');
+                        console.log('对话框应该已显示');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert(`获取ETF信息失败，请稍后重试。错误信息: ${error.message}`);
+                });
+        });
+    }
+    
+    // 确认添加ETF
+    if (confirmAddEtfBtn) {
+        confirmAddEtfBtn.addEventListener('click', function() {
+            console.log('确认按钮已点击');
+            etfConfirmModal.classList.add('hidden');
+            
+            // 创建一个隐藏的表单元素
+            const hiddenForm = document.createElement('form');
+            hiddenForm.method = 'post';
+            hiddenForm.action = "{{ url_for('add_custom_etf') }}";
+            
+            // 添加CSRF令牌
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = "{{ csrf_token }}";
+            hiddenForm.appendChild(csrfInput);
+            
+            // 添加ETF代码
+            const symbolInput = document.createElement('input');
+            symbolInput.type = 'hidden';
+            symbolInput.name = 'symbol';
+            symbolInput.value = document.getElementById('symbol').value.trim();
+            hiddenForm.appendChild(symbolInput);
+            
+            // 提交表单
+            document.body.appendChild(hiddenForm);
+            hiddenForm.submit();
+        });
+    }
+    
+    // 取消添加ETF
+    if (cancelAddEtfBtn) {
+        cancelAddEtfBtn.addEventListener('click', function() {
+            console.log('取消按钮已点击');
+            etfConfirmModal.classList.add('hidden');
+        });
+    }
+    
+    // 注销账户确认
+    const deleteAccountBtn = document.getElementById('delete-account-btn');
+    const deleteAccountConfirm = document.getElementById('delete-account-confirm');
+    const cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+    
+    if (deleteAccountBtn && deleteAccountConfirm) {
+        deleteAccountBtn.addEventListener('click', function() {
+            deleteAccountConfirm.classList.remove('hidden');
+        });
+        
+        cancelDeleteBtn.addEventListener('click', function() {
+            deleteAccountConfirm.classList.add('hidden');
+        });
+    }
+    
+    // 如果URL中有hash，打开对应的选项卡
+    if (window.location.hash) {
+        const targetTab = document.querySelector(`[data-tabs-target="${window.location.hash.substring(1)}"]`);
+        if (targetTab) {
+            targetTab.click();
+        }
+    }
+});
+</script>
+{% endblock %} 

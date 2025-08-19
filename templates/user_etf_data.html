@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}{{ etf.name }} ({{ etf.symbol }}) - 自定义ETF数据{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- 页面标题和返回 -->
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+        <div class="flex justify-between items-center">
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800">{{ etf.display_name or etf.name }} ({{ etf.symbol }}) - 自定义ETF数据</h1>
+                {% if is_official %}
+                <div class="mt-1 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <svg class="mr-1 h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
+                    </svg>
+                    官方ETF
+                </div>
+                {% endif %}
+            </div>
+            <a href="{{ url_for('user_etf_data') }}" class="text-blue-600 hover:text-blue-800 flex items-center">
+                <i class="fas fa-arrow-left mr-1"></i> 返回自定义ETF
+            </a>
+        </div>
+        <p class="text-sm text-gray-500 mt-2">
+            此ETF是您添加的自定义ETF，仅对您可见，不会出现在公共页面中。
+            {% if is_official %}
+            <span class="text-blue-600">注意：此ETF同时也是官方ETF列表的一部分。</span>
+            {% endif %}
+        </p>
+    </div>
+
+    {% if data_insufficient %}
+    <!-- 数据不足警告 -->
+    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6 md:mb-8">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-yellow-700">
+                    网格参数计算需要较长期历史数据。当前数据可能不足或有缺失，显示的是基于可用数据的估算结果。这不影响您使用网格交易策略，建议参考但不要完全依赖这些参数。
+                </p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 数据卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6 mb-6 md:mb-8">
+        <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+            <div class="flex items-center justify-between mb-2 md:mb-4">
+                <h3 class="text-sm md:text-lg font-medium text-gray-700">当前价格</h3>
+                <div class="bg-blue-100 rounded-full p-1 md:p-2">
+                    <i class="fas fa-dollar-sign text-blue-600 text-sm md:text-base"></i>
+                </div>
+            </div>
+            <p class="text-xl md:text-3xl font-bold text-gray-800">{{ price|round(2) }}</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+            <div class="flex items-center justify-between mb-2 md:mb-4">
+                <h3 class="text-sm md:text-lg font-medium text-gray-700">波动率</h3>
+                <div class="bg-purple-100 rounded-full p-1 md:p-2">
+                    <i class="fas fa-chart-line text-purple-600 text-sm md:text-base"></i>
+                </div>
+            </div>
+            <p class="text-xl md:text-3xl font-bold text-gray-800">{{ volatility|round(2) }}%</p>
+            <p class="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">200日年化波动率</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+            <div class="flex items-center justify-between mb-2 md:mb-4">
+                <h3 class="text-sm md:text-lg font-medium text-gray-700">网格间隔</h3>
+                <div class="bg-indigo-100 rounded-full p-1 md:p-2">
+                    <i class="fas fa-th text-indigo-600 text-sm md:text-base"></i>
+                </div>
+            </div>
+            <p class="text-xl md:text-3xl font-bold text-gray-800">{{ grid_spacing|round(2) }}%</p>
+            <p class="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">波动率/8</p>
+        </div>
+        <div class="bg-white rounded-lg shadow-md p-3 md:p-6">
+            <div class="flex items-center justify-between mb-2 md:mb-4">
+                <h3 class="text-sm md:text-lg font-medium text-gray-700">建议仓位</h3>
+                <div class="bg-green-100 rounded-full p-1 md:p-2">
+                    <i class="fas fa-balance-scale text-green-600 text-sm md:text-base"></i>
+                </div>
+            </div>
+            <p class="text-xl md:text-3xl font-bold text-gray-800">{{ position|round(2) }}%</p>
+            <p class="text-xs md:text-sm text-gray-500 mt-1 md:mt-2">
+                {% if position > 80 %}重仓买入{% elif position > 60 %}适度买入{% elif position > 40 %}中性持仓{% elif position > 20 %}适度减仓{% else %}大幅减仓{% endif %}
+            </p>
+        </div>
+    </div>
+
+    <!-- 网格区间可视化 -->
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">网格区间</h2>
+        <div class="relative h-16 md:h-20 bg-gray-200 rounded-lg overflow-hidden mb-3 md:mb-4">
+            <div class="absolute h-full bg-blue-100" style="width: 100%"></div>
+            <div class="absolute w-1 h-full bg-red-500" 
+                style="left: {{ ((price - lower_limit) / (upper_limit - lower_limit) * 100)|round(2) }}%"></div>
+            <div class="absolute top-0 right-0 p-1 md:p-2 text-xs md:text-sm font-medium">上限: {{ upper_limit|round(2) }}</div>
+            <div class="absolute top-0 left-0 p-1 md:p-2 text-xs md:text-sm font-medium">下限: {{ lower_limit|round(2) }}</div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 md:gap-4 text-center">
+            <div>
+                <p class="text-xs md:text-sm text-gray-500">网格区间</p>
+                <p class="font-bold text-gray-800 text-sm md:text-base">{{ ((upper_limit - lower_limit) / price * 100)|round(2) }}%</p>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-500">网格层数</p>
+                <p class="font-bold text-gray-800 text-sm md:text-base">{{ total_levels }}</p>
+            </div>
+            <div>
+                <p class="text-xs md:text-sm text-gray-500">当前层数</p>
+                <p class="font-bold text-gray-800 text-sm md:text-base">{{ current_level }} / {{ total_levels }}</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 价格历史图表 -->
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+        <h2 class="text-lg md:text-xl font-bold text-gray-800 mb-3 md:mb-4">价格历史</h2>
+        <div class="h-64 md:h-80">
+            <canvas id="price-chart"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // 绘制价格历史图表
+    const priceChartCtx = document.getElementById('price-chart').getContext('2d');
+    const priceData = {{ price_data|safe }};
+    
+    const dates = priceData.map(item => item[0]);
+    const prices = priceData.map(item => item[1]);
+    
+    new Chart(priceChartCtx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: '收盘价',
+                data: prices,
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                borderWidth: 2,
+                tension: 0.1,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
+                }
+            },
+            scales: {
+                x: {
+                    grid: {
+                        display: false
+                    },
+                    ticks: {
+                        maxTicksLimit: 10
+                    }
+                },
+                y: {
+                    grid: {
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
+                    ticks: {
+                        callback: function(value) {
+                            return value.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock %} 

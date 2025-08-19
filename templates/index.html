@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}首页 - ETF网格交易助手{% endblock %}
+
+{% block content %}
+<!-- 欢迎区域 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6 mb-6 md:mb-8">
+    <h1 class="text-2xl md:text-3xl font-bold text-gray-800 mb-3 md:mb-4">欢迎使用ETF网格交易助手</h1>
+    <p class="text-gray-600 mb-4 md:mb-6 text-sm md:text-base">本工具帮助您分析ETF的波动率、网格间隔和建议仓位，辅助您进行网格交易决策。</p>
+    
+    <!-- 桌面版按钮组 -->
+    <div class="hidden md:flex md:space-x-4">
+        <a href="/dashboard" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-chart-bar mr-2"></i> 查看数据仪表盘
+        </a>
+        <a href="/history" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-history mr-2"></i> 查看历史数据
+        </a>
+        <a href="/portfolio" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-chart-pie mr-2"></i> 投资组合分配
+        </a>
+        <a href="/public_backtest" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-calculator mr-2"></i> 网格交易回测
+        </a>
+        <a href="/my_portfolios" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+            <i class="fas fa-folder-open mr-2"></i> 我的投资组合
+        </a>
+    </div>
+    
+    <!-- 移动版按钮组 -->
+    <div class="grid grid-cols-2 gap-3 md:hidden">
+        <a href="/public_backtest" class="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+            <i class="fas fa-calculator mr-1"></i> 网格回测
+        </a>
+        <a href="/dashboard" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+            <i class="fas fa-chart-bar mr-1"></i> 数据仪表盘
+        </a>
+        <a href="/history" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+            <i class="fas fa-history mr-1"></i> 历史数据
+        </a>
+        <a href="/portfolio" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+            <i class="fas fa-chart-pie mr-1"></i> 投资组合
+        </a>
+        <a href="/my_portfolios" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded-lg transition duration-300 flex items-center justify-center text-sm">
+            <i class="fas fa-folder-open mr-1"></i> 我的投资组合
+        </a>
+    </div>
+    
+    <!-- 数据库状态显示 -->
+    <div id="db-status" class="mt-4 p-3 bg-gray-100 rounded-lg text-sm" style="display: none;">
+        <p class="text-sm text-gray-600">
+            <i class="fas fa-database mr-1"></i> 
+            数据库状态: <span id="db-status-text">正在检查...</span>
+        </p>
+    </div>
+</div>
+
+
+<!-- ETF列表 -->
+<div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+    <h2 class="text-xl md:text-2xl font-bold text-gray-800 mb-3 md:mb-4">选择ETF</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+        {% for symbol in symbols %}
+        <a href="/dashboard?symbol={{ symbol.code }}" class="bg-gray-50 hover:bg-blue-50 border border-gray-200 rounded-lg p-3 md:p-4 transition duration-300 flex items-center">
+            <div class="bg-blue-100 rounded-full p-2 md:p-3 mr-3 md:mr-4">
+                <i class="fas fa-chart-pie text-blue-600"></i>
+            </div>
+            <div>
+                <h3 class="font-bold text-gray-800 text-sm md:text-base">{{ symbol.name }}</h3>
+                <p class="text-gray-500 text-xs md:text-sm">代码: {{ symbol.code }}</p>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- 功能介绍 -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 mt-6 md:mt-8">
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <div class="text-blue-600 text-3xl md:text-4xl mb-3 md:mb-4">
+            <i class="fas fa-chart-line"></i>
+        </div>
+        <h3 class="text-lg md:text-xl font-bold text-gray-800 mb-2">波动率分析</h3>
+        <p class="text-gray-600 text-sm md:text-base">基于200日历史数据计算ETF的波动率，帮助您了解市场风险。</p>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <div class="text-indigo-600 text-3xl md:text-4xl mb-3 md:mb-4">
+            <i class="fas fa-th"></i>
+        </div>
+        <h3 class="text-lg md:text-xl font-bold text-gray-800 mb-2">网格交易策略</h3>
+        <p class="text-gray-600 text-sm md:text-base">自动计算网格间隔和层数，为您的网格交易提供科学依据。</p>
+    </div>
+    <div class="bg-white rounded-lg shadow-md p-4 md:p-6">
+        <div class="text-green-600 text-3xl md:text-4xl mb-3 md:mb-4">
+            <i class="fas fa-balance-scale"></i>
+        </div>
+        <h3 class="text-lg md:text-xl font-bold text-gray-800 mb-2">仓位建议</h3>
+        <p class="text-gray-600 text-sm md:text-base">根据当前价格在网格中的位置，提供合理的仓位配置建议。</p>
+    </div>
+</div>
+
+<!-- 微信公众号关注区 -->
+<div class="bg-gradient-to-r from-green-50 to-green-100 rounded-lg shadow-md p-4 md:p-6 mt-6 md:mt-8">
+    <div class="flex flex-col md:flex-row items-center justify-between">
+        <div class="mb-4 md:mb-0 md:mr-6">
+            <div class="flex items-center mb-3">
+                <i class="fab fa-weixin text-green-600 text-3xl mr-3"></i>
+                <h3 class="text-xl md:text-2xl font-bold text-gray-800">双重关注 双倍收获</h3>
+            </div>
+            <p class="text-gray-700 mb-3">关注公众号获取交易策略，添加个人微信深度交流</p>
+            <ul class="text-gray-600 text-sm md:text-base mb-3">
+                <li class="flex items-center mb-2">
+                    <i class="fas fa-newspaper text-green-500 mr-2"></i>
+                    <span>公众号：市场分析与网格策略更新</span>
+                </li>
+                <li class="flex items-center mb-2">
+                    <i class="fas fa-user-friends text-green-500 mr-2"></i>
+                    <span>个人微信：一对一答疑与交流</span>
+                </li>
+                <li class="flex items-center">
+                    <i class="fas fa-users text-green-500 mr-2"></i>
+                    <span>加入投资者社群，共同成长</span>
+                </li>
+            </ul>
+            <div class="flex space-x-3 md:hidden">
+                <button class="wechat-public-btn bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+                    <i class="fab fa-weixin mr-2"></i> 公众号
+                </button>
+                <button class="wechat-personal-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 flex items-center">
+                    <i class="fas fa-user mr-2"></i> 个人微信
+                </button>
+            </div>
+        </div>
+        <div class="flex space-x-4 hidden md:flex">
+            <div class="bg-white p-3 rounded-lg shadow-sm text-center">
+                <img src="/static/images/public_qrcode.jpg" alt="微信公众号二维码" class="w-36 h-36 object-cover rounded">
+                <p class="text-center text-gray-600 text-sm mt-2">扫码关注公众号</p>
+            </div>
+            <div class="bg-white p-3 rounded-lg shadow-sm text-center">
+                <img src="/static/images/personal_qrcode.jpg" alt="个人微信二维码" class="w-36 h-36 object-cover rounded">
+                <p class="text-center text-gray-600 text-sm mt-2">添加个人微信</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<!-- JavaScript -->
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const dbStatusText = document.getElementById('db-status-text');
+
+        // 获取数据库状态 - 仅在管理员模式下显示
+        function checkDbStatus() {
+            // 在管理员页面才进行状态检查
+            if (window.location.pathname.includes('/admin')) {
+                fetch('/api/diagnostics/db')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            document.getElementById('db-status').style.display = 'block';
+                            dbStatusText.innerHTML = `数据库中共有 <strong>${data.record_count}</strong> 条记录`;
+                            if (data.record_count === 0) {
+                                dbStatusText.innerHTML += ' <span class="text-green-600">(数据库为空)</span>';
+                            }
+                        } else {
+                            dbStatusText.textContent = '无法获取数据库状态';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('获取数据库状态失败:', error);
+                        dbStatusText.textContent = '获取数据库状态失败';
+                    });
+            }
+        }
+
+        // 页面加载时检查数据库状态
+        checkDbStatus();
+    });
+</script>
+{% endblock %} 
