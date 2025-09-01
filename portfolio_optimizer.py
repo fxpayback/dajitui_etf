@@ -15,7 +15,6 @@ import pandas as pd
 
 from models.etf_data import get_etf_data
 
-
 @dataclass
 class BacktestResult:
     """Container for backtest results."""
