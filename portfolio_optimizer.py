@@ -1,9 +1,9 @@
 """Portfolio optimization and backtesting using evolutionary algorithm.
 
-This script evaluates multiple ETF portfolios by optimizing asset weights on a
-training set and selecting the portfolio that performs best on a test set.
-It uses an evolutionary algorithm for fast convergence and includes a
-train/test split to reduce the risk of overfitting.
+This script evaluates multiple ETF portfolios by optimizing asset weights on
+rolling training windows and comparing them via cross-validated Sharpe ratios.
+The final portfolio is chosen based on validation performance and then
+evaluated on a hold-out test segment to guard against overfitting.
 """
 from __future__ import annotations
 
@@ -16,6 +16,10 @@ import pandas as pd
 from models.etf_data import get_etf_data
 
 
+# Set a global seed for reproducibility of the evolutionary algorithm
+np.random.seed(42)
+
+
 @dataclass
 class BacktestResult:
     """Container for backtest results."""
@@ -24,6 +28,7 @@ class BacktestResult:
     weights: np.ndarray
     train_sharpe: float
     test_sharpe: float
+    validation_sharpe: float
 
 
 def fetch_prices(symbols: Iterable[str]) -> pd.DataFrame:
@@ -86,26 +91,57 @@ def evolutionary_optimize(
     return population[best_idx]
 
 
-def backtest_portfolio(symbols: Sequence[str]) -> BacktestResult:
-    """Backtest a portfolio of symbols and return the result."""
+def backtest_portfolio(symbols: Sequence[str], n_splits: int = 3) -> BacktestResult:
+    """Backtest a portfolio using walk-forward cross-validation.
+
+    Parameters
+    ----------
+    symbols:
+        ETF symbols to include in the portfolio.
+    n_splits:
+        Number of cross-validation folds. The data is divided into
+        ``n_splits + 1`` chronological segments; the last segment is kept as
+        an untouched test set.
+    """
+
     prices = fetch_prices(symbols)
     returns = prices.pct_change().dropna()
 
-    split = int(len(returns) * 0.8)
-    train = returns.iloc[:split]
-    test = returns.iloc[split:]
+    # Determine fold size for walk-forward validation
+    fold_size = len(returns) // (n_splits + 1)
+    val_scores: List[float] = []
 
+    # Perform walk-forward cross-validation
+    for i in range(n_splits):
+        train = returns.iloc[: fold_size * (i + 1)]
+        val = returns.iloc[fold_size * (i + 1) : fold_size * (i + 2)]
+        weights = evolutionary_optimize(train)
+        val_scores.append(sharpe_ratio(weights, val))
+
+    # Train on all data except the final segment and evaluate on the hold-out
+    train = returns.iloc[: fold_size * n_splits]
+    test = returns.iloc[fold_size * n_splits :]
     weights = evolutionary_optimize(train)
     train_score = sharpe_ratio(weights, train)
     test_score = sharpe_ratio(weights, test)
 
-    return BacktestResult(symbols, weights, train_score, test_score)
+    return BacktestResult(
+        symbols,
+        weights,
+        train_score,
+        test_score,
+        float(np.mean(val_scores)) if val_scores else 0.0,
+    )
 
 
-def optimise_portfolios(portfolios: Iterable[Sequence[str]]) -> BacktestResult:
-    """Evaluate multiple portfolios and return the best one."""
-    results = [backtest_portfolio(p) for p in portfolios]
-    return max(results, key=lambda r: r.test_sharpe)
+def optimise_portfolios(portfolios: Iterable[Sequence[str]], n_splits: int = 3) -> BacktestResult:
+    """Evaluate multiple portfolios and return the best one.
+
+    Portfolios are compared using the cross-validated Sharpe ratio to reduce
+    the risk of overfitting to any particular sample.
+    """
+    results = [backtest_portfolio(p, n_splits=n_splits) for p in portfolios]
+    return max(results, key=lambda r: r.validation_sharpe)
 
 
 if __name__ == "__main__":
@@ -115,8 +151,9 @@ if __name__ == "__main__":
         ["159915", "159949", "159922"],
     ]
     best = optimise_portfolios(candidate_portfolios)
-    print("Best portfolio based on test Sharpe ratio:")
+    print("Best portfolio based on cross-validated Sharpe ratio:")
     print(f"Symbols: {best.symbols}")
     print(f"Weights: {np.round(best.weights, 3)}")
     print(f"Train Sharpe: {best.train_sharpe:.3f}")
+    print(f"Validation Sharpe: {best.validation_sharpe:.3f}")
     print(f"Test Sharpe: {best.test_sharpe:.3f}")
