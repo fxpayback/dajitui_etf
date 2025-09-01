@@ -1,52 +1,8 @@
 import numpy as np
 import pandas as pd
-import akshare as ak
-import warnings
-import time
 from datetime import datetime
 
-# 忽略警告
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=UserWarning)
-
-# 修复 quantstats 中的问题
-def safe_product(arr):
-    return np.prod(arr)
-
-from quantstats.stats import _np
-_np.product = safe_product
-
-def get_etf_data(symbol, end_date=None):
-    """获取ETF/LOF数据"""
-    max_retries = 3
-    if end_date is None:
-        end_date = datetime.now().strftime("%Y%m%d")
-    for retry in range(max_retries):
-        try:
-            df = ak.fund_etf_hist_em(
-                    symbol=symbol, 
-                    period="daily", 
-                    start_date="20121210", 
-                    end_date=end_date,
-                    adjust="qfq"
-                )    
-            # 只保留需要的列并重命名
-            df = df.rename(columns={
-                '日期': 'date',
-                '收盘': 'close',
-            })
-            df['date'] = pd.to_datetime(df['date'])
-            df.set_index('date', inplace=True)
-            df.sort_index(inplace=True)
-            
-            return df, symbol
-        except Exception as e:
-            if retry < max_retries - 1:
-                print(f"第{retry + 1}次获取数据失败，正在重试...")
-                time.sleep(5)
-            else:
-                print(f"获取数据失败: {str(e)}")
-                raise
+from models.etf_data import get_etf_data
 
 # 200日波动率
 def calculate_volatility(symbol, window=200):
@@ -84,6 +40,68 @@ def calculate_grid_range(symbol):
     
     # 返回一个 DataFrame，确保索引与 df 一致
     return pd.DataFrame({'H_val': H, 'L_val': L}, index=df.index)
+
+
+def backtest_grid_strategy(symbol, start_date, end_date, initial_capital=100000, grid_levels=10):
+    """使用简单网格策略对ETF进行回测"""
+    df, _ = get_etf_data(symbol)
+    df = df[(df.index >= start_date) & (df.index <= end_date)].copy()
+    if df.empty:
+        raise ValueError("指定日期范围内无数据")
+
+    grid_range = calculate_grid_range(symbol)
+    grid_spacing = calculate_grid_spacing(symbol)
+
+    lower = grid_range['L_val'].iloc[-1]
+    spacing = grid_spacing.iloc[-1]
+    invest_per_level = initial_capital / grid_levels
+
+    cash = initial_capital
+    position = 0.0
+    trades = []
+
+    prev_level = int((df['close'].iloc[0] - lower) / (spacing * lower))
+
+    for date, price in df['close'].items():
+        level = int((price - lower) / (spacing * lower))
+
+        while level < prev_level and cash >= invest_per_level:
+            qty = invest_per_level / price
+            cash -= invest_per_level
+            position += qty
+            trades.append({"date": date.strftime('%Y-%m-%d'), "type": 'buy', "price": round(price, 2), "quantity": round(qty, 2)})
+            prev_level -= 1
+
+        while level > prev_level and position > 0:
+            qty = invest_per_level / price
+            cash += qty * price
+            position -= qty
+            trades.append({"date": date.strftime('%Y-%m-%d'), "type": 'sell', "price": round(price, 2), "quantity": round(qty, 2)})
+            prev_level += 1
+
+    final_equity = cash + position * df['close'].iloc[-1]
+    return {
+        'final_equity': final_equity,
+        'return_pct': (final_equity / initial_capital - 1) * 100,
+        'trades': trades,
+    }
+
+
+def optimize_grid_strategy(symbols, start_date, end_date, grid_levels_options, initial_capital=100000):
+    """遍历多支ETF和网格层数，寻找回测收益最高的组合"""
+    best = None
+    for symbol in symbols:
+        for levels in grid_levels_options:
+            result = backtest_grid_strategy(
+                symbol,
+                start_date,
+                end_date,
+                initial_capital=initial_capital,
+                grid_levels=levels,
+            )
+            if best is None or result["final_equity"] > best["final_equity"]:
+                best = {"symbol": symbol, "grid_levels": levels, **result}
+    return best
 
 
 # 使用示例
@@ -163,3 +181,10 @@ if __name__ == "__main__":
         position = 1 - current_level / total_levels
         position = max(0, min(1, position))  # 将仓位限制在0-1之间
         print(f"当前仓位: {round(position * 100)}%")
+
+        # 回测网格策略
+        try:
+            result = backtest_grid_strategy(symbol, '20200101', specific_date, grid_levels=grid_levels)
+            print(f"回测收益率: {result['return_pct']:.2f}%")
+        except Exception as e:
+            print(f"回测失败: {e}")
