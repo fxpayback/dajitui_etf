@@ -86,6 +86,51 @@ def calculate_grid_range(symbol):
     return pd.DataFrame({'H_val': H, 'L_val': L}, index=df.index)
 
 
+def backtest_grid_strategy(symbol, start_date, end_date, initial_capital=100000, grid_levels=10):
+    """使用简单网格策略对ETF进行回测"""
+    df, _ = get_etf_data(symbol)
+    df = df[(df.index >= start_date) & (df.index <= end_date)].copy()
+    if df.empty:
+        raise ValueError("指定日期范围内无数据")
+
+    grid_range = calculate_grid_range(symbol)
+    grid_spacing = calculate_grid_spacing(symbol)
+
+    lower = grid_range['L_val'].iloc[-1]
+    spacing = grid_spacing.iloc[-1]
+    invest_per_level = initial_capital / grid_levels
+
+    cash = initial_capital
+    position = 0.0
+    trades = []
+
+    prev_level = int((df['close'].iloc[0] - lower) / (spacing * lower))
+
+    for date, price in df['close'].items():
+        level = int((price - lower) / (spacing * lower))
+
+        while level < prev_level and cash >= invest_per_level:
+            qty = invest_per_level / price
+            cash -= invest_per_level
+            position += qty
+            trades.append({"date": date.strftime('%Y-%m-%d'), "type": 'buy', "price": round(price, 2), "quantity": round(qty, 2)})
+            prev_level -= 1
+
+        while level > prev_level and position > 0:
+            qty = invest_per_level / price
+            cash += qty * price
+            position -= qty
+            trades.append({"date": date.strftime('%Y-%m-%d'), "type": 'sell', "price": round(price, 2), "quantity": round(qty, 2)})
+            prev_level += 1
+
+    final_equity = cash + position * df['close'].iloc[-1]
+    return {
+        'final_equity': final_equity,
+        'return_pct': (final_equity / initial_capital - 1) * 100,
+        'trades': trades,
+    }
+
+
 # 使用示例
 if __name__ == "__main__":
     symbols = [
@@ -163,3 +208,10 @@ if __name__ == "__main__":
         position = 1 - current_level / total_levels
         position = max(0, min(1, position))  # 将仓位限制在0-1之间
         print(f"当前仓位: {round(position * 100)}%")
+
+        # 回测网格策略
+        try:
+            result = backtest_grid_strategy(symbol, '20200101', specific_date, grid_levels=grid_levels)
+            print(f"回测收益率: {result['return_pct']:.2f}%")
+        except Exception as e:
+            print(f"回测失败: {e}")
