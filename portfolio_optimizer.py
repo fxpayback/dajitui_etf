@@ -15,11 +15,6 @@ import pandas as pd
 
 from models.etf_data import get_etf_data
 
-
-# Set a global seed for reproducibility of the evolutionary algorithm
-np.random.seed(42)
-
-
 @dataclass
 class BacktestResult:
     """Container for backtest results."""
@@ -56,12 +51,24 @@ def evolutionary_optimize(
     population_size: int = 40,
     generations: int = 60,
     mutation_rate: float = 0.1,
+    rng: np.random.Generator | None = None,
 ) -> np.ndarray:
-    """Optimise asset weights using a simple evolutionary algorithm."""
+    """Optimise asset weights using a simple evolutionary algorithm.
+
+    Parameters
+    ----------
+    returns:
+        Historical return series used to evaluate fitness.
+    population_size, generations, mutation_rate:
+        Standard evolutionary algorithm hyper-parameters.
+    rng:
+        Optional random number generator for reproducible results.
+    """
+    rng = rng or np.random.default_rng()
     n_assets = returns.shape[1]
 
     def random_weights() -> np.ndarray:
-        w = np.random.rand(n_assets)
+        w = rng.random(n_assets)
         return w / w.sum()
 
     population = np.array([random_weights() for _ in range(population_size)])
@@ -75,12 +82,12 @@ def evolutionary_optimize(
         # Create offspring via crossover and mutation
         children = []
         while len(children) < population_size - len(parents):
-            p1, p2 = parents[np.random.randint(len(parents), size=2)]
-            mask = np.random.rand(n_assets) < 0.5
+            p1, p2 = parents[rng.integers(len(parents), size=2)]
+            mask = rng.random(n_assets) < 0.5
             child = np.where(mask, p1, p2)
-            if np.random.rand() < mutation_rate:
-                mutate_idx = np.random.randint(n_assets)
-                child[mutate_idx] = np.random.rand()
+            if rng.random() < mutation_rate:
+                mutate_idx = rng.integers(n_assets)
+                child[mutate_idx] = rng.random()
             child = child / child.sum()
             children.append(child)
         population = np.vstack((parents, children))
@@ -91,7 +98,11 @@ def evolutionary_optimize(
     return population[best_idx]
 
 
-def backtest_portfolio(symbols: Sequence[str], n_splits: int = 3) -> BacktestResult:
+def backtest_portfolio(
+    symbols: Sequence[str],
+    n_splits: int = 3,
+    seed: int | None = 42,
+) -> BacktestResult:
     """Backtest a portfolio using walk-forward cross-validation.
 
     Parameters
@@ -106,6 +117,7 @@ def backtest_portfolio(symbols: Sequence[str], n_splits: int = 3) -> BacktestRes
 
     prices = fetch_prices(symbols)
     returns = prices.pct_change().dropna()
+    rng = np.random.default_rng(seed)
 
     # Determine fold size for walk-forward validation
     fold_size = len(returns) // (n_splits + 1)
@@ -115,13 +127,13 @@ def backtest_portfolio(symbols: Sequence[str], n_splits: int = 3) -> BacktestRes
     for i in range(n_splits):
         train = returns.iloc[: fold_size * (i + 1)]
         val = returns.iloc[fold_size * (i + 1) : fold_size * (i + 2)]
-        weights = evolutionary_optimize(train)
+        weights = evolutionary_optimize(train, rng=rng)
         val_scores.append(sharpe_ratio(weights, val))
 
     # Train on all data except the final segment and evaluate on the hold-out
     train = returns.iloc[: fold_size * n_splits]
     test = returns.iloc[fold_size * n_splits :]
-    weights = evolutionary_optimize(train)
+    weights = evolutionary_optimize(train, rng=rng)
     train_score = sharpe_ratio(weights, train)
     test_score = sharpe_ratio(weights, test)
 
@@ -134,13 +146,17 @@ def backtest_portfolio(symbols: Sequence[str], n_splits: int = 3) -> BacktestRes
     )
 
 
-def optimise_portfolios(portfolios: Iterable[Sequence[str]], n_splits: int = 3) -> BacktestResult:
+def optimize_portfolios(
+    portfolios: Iterable[Sequence[str]],
+    n_splits: int = 3,
+    seed: int | None = 42,
+) -> BacktestResult:
     """Evaluate multiple portfolios and return the best one.
 
     Portfolios are compared using the cross-validated Sharpe ratio to reduce
     the risk of overfitting to any particular sample.
     """
-    results = [backtest_portfolio(p, n_splits=n_splits) for p in portfolios]
+    results = [backtest_portfolio(p, n_splits=n_splits, seed=seed) for p in portfolios]
     return max(results, key=lambda r: r.validation_sharpe)
 
 
@@ -150,7 +166,7 @@ if __name__ == "__main__":
         ["510300", "510500"],
         ["159915", "159949", "159922"],
     ]
-    best = optimise_portfolios(candidate_portfolios)
+    best = optimize_portfolios(candidate_portfolios)
     print("Best portfolio based on cross-validated Sharpe ratio:")
     print(f"Symbols: {best.symbols}")
     print(f"Weights: {np.round(best.weights, 3)}")
